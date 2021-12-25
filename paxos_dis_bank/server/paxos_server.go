@@ -1,0 +1,1139 @@
+package main
+
+import (
+	//"cmp"
+
+	"fmt"
+	"log"
+	"net/http"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/google/go-cmp/cmp"
+	//"github.com/juneciel510/test/lab3/failuredetector"
+	//"github.com/juneciel510/test/lab3/leaderdetector"
+
+	// "github.com/juneciel510/test/lab5/bank"
+	// multipaxos "github.com/juneciel510/test/lab5/newpaxos"
+
+	// //websocket client
+	// "github.com/webdeveloppro/golang-websocket-client/pkg/client"
+	// //websocket server
+	// "github.com/webdeveloppro/golang-websocket-client/pkg/server"
+
+	"distributed_bank/bank"
+	"distributed_bank/failuredetector"
+	"distributed_bank/leaderdetector"
+	multipaxos "distributed_bank/newpaxos"
+
+	//websocket client
+	"distributed_bank/golang-websocket-client/pkg/client"
+	//websocket server
+	"distributed_bank/golang-websocket-client/pkg/server"
+)
+
+/*
+func (d *DistNetworks) newTCPServer(ID int, nInfo NodesInfo) (*TcpServer, error) {
+	addr := nInfo.ServerAddrmap[ID]
+	//log.Println("reflect.TypeOf addr", reflect.TypeOf(addr))
+	log.Println("Creating server " + addr + " ...")
+	listener, err := net.Listen("tcp", addr)
+	if err != nil {
+		log.Fatal("Listen err: ", err)
+	}
+	//liscon := make(map[int]net.Conn)
+	tcpsrv := &TcpServer{Con: listener,
+		SId: ID, SAddr: addr}
+	d.Mycon = *tcpsrv
+	//, liscon: liscon
+	//log.Println("the TcpServer structure ", tcpsrv)
+	return tcpsrv, err //intializing conncetion
+}
+*/
+// sID: The id of the node running this instance of a Paxos proposer.
+//
+// nrOfNodes: The total number of Paxos nodes.
+//
+// adu: all-decided-up-to. The initial id of the highest _consecutive_ slot
+// that has been decided. Should normally be set to -1 initially,
+func NewDistNetwork(sID int, currentSerList []int, allNodeInfo NodesInfo, aInfo map[int]bank.Account) *DistNetworks {
+	adu := -1 //set to -1 initially
+	delay := time.Second
+
+	//var serverAddrmap map[int]string
+	serverAddrmap := make(map[int]string)
+	for _, v := range currentSerList {
+		serverAddrmap[v] = allNodeInfo.ServerAddrmap[v]
+	}
+	//log.Println("NewDistNetwork serverAddrmap", serverAddrmap)
+	NI := NodesInfo{ServerIDlist: currentSerList,
+		ServerAddrmap: serverAddrmap,
+	}
+	//log.Println("NewDistNetwork NI", NI)
+
+	hbsend := make(chan failuredetector.Heartbeat)
+	learnOut := make(chan multipaxos.Learn)
+	promiseOut := make(chan multipaxos.Promise)
+	prepareOut := make(chan multipaxos.Prepare)
+	acceptOut := make(chan multipaxos.Accept)
+	decidedOut := make(chan multipaxos.DecidedValue)
+
+	sIDL := NI.ServerIDlist
+	nrOfNodes := len(NI.ServerAddrmap)
+
+	leadDect := leaderdetector.NewMonLeaderDetector(sIDL)
+	failDect := failuredetector.NewEvtFailureDetector(sID, sIDL, leadDect, delay, hbsend)
+	proposer := multipaxos.NewProposer(int(sID), nrOfNodes, adu, leadDect, prepareOut, acceptOut)
+	acceptor := multipaxos.NewAcceptor(int(sID), promiseOut, learnOut)
+	learner := multipaxos.NewLearner(int(sID), nrOfNodes, decidedOut)
+	ldSubscribe := leadDect.Subscribe()
+
+	broadcast:= make(chan server.Message)
+	msgIn:=make(chan server.Message) 
+	hub := server.NewHub(broadcast,msgIn)
+
+	return &DistNetworks{
+		SID: sID,
+		Adu:           adu,
+		Delay:         time.Second,
+		AllNodeInfo:   allNodeInfo,
+		CurrentServ:   currentSerList,
+		NdInfo:        NI,
+		ClientAddrmap: make(map[string]string),
+		dcVmap:        make(map[int]multipaxos.DecidedValue),
+		AccountMap:    aInfo,
+
+		Ld:       *leadDect,
+		Fd:       *failDect,
+		Proposer: *proposer,
+		Acceptor: *acceptor,
+		Learner:  *learner,
+
+		//channels output
+		Hbout:       hbsend,
+		LearnOut:    learnOut,
+		PromiseOut:  promiseOut,
+		PrepareOut:  prepareOut,
+		AcceptOut:   acceptOut,
+		DecidedOut:  decidedOut,
+		LdSubscribe: ldSubscribe,
+
+		//parameters for reconfig
+		//OlderServer: currentSerList,
+		Quorum:     (len(currentSerList) / 2) + 1,
+		TimeReconf: int(time.Now().Unix()),
+		CprmMap:    make(map[int][]CPromise),
+		DcStatMap:  make(map[int]State),
+
+		//channels for reconfig
+		ReconfIn: make(chan Reconf, 8),
+		//ReconfOut: make(chan Reconf),
+
+		//NewconfOut: make(chan Newconf),
+		NewconfIn: make(chan Newconf, 8),
+
+		CPromiseIn: make(chan CPromise, 8),
+		//CPromiseOut: make(chan State),
+
+		ActIn: make(chan Activiate, 8),
+		//ActOut: make(chan Activiate),
+		CheckPoint: make(map[int]multipaxos.DecidedValue),
+		ClientWSMap: make(map[int]*client.WebSocketClient),
+		Broadcast: broadcast,
+		MsgIn:msgIn,
+		Hub:hub,
+	}
+
+}
+
+func (d *DistNetworks) start() {
+	d.Fd.Start()
+	d.Proposer.Start()
+	d.Acceptor.Start()
+	d.Learner.Start()
+	log.Println("************the Fd&paxos have been started")
+}
+/*
+func (d *DistNetworks) serverTCP() { //start conncetion
+	log.Println("*******start severTCP function")
+
+	//log.Println("reflect.TypeOf d.Mycon.Con", reflect.TypeOf(d.Mycon.Con))
+	list := d.Mycon.Con
+	//log.Println("Starting server ...", list)
+	//if the server is in the list of current servers, start FD & multipaxos
+	for _, v := range d.CurrentServ {
+		if d.Mycon.SId == v {
+			d.start()
+		}
+	}
+
+	defer list.Close()
+	for {
+		//var conn net.Conn
+		conn, err := list.Accept()
+		//log.Println("serverTCP--local address of the connection ", conn.LocalAddr())
+		//log.Println("serverTCP--remote address of the connection ", conn.RemoteAddr())
+		if err != nil {
+			log.Fatal("Connection err: ", err)
+		}
+
+		tmp := make([]byte, 1024)
+		n, err := conn.Read(tmp)
+		//log.Println("Sucessfully read from the conn of byte:", n, tmp[0:n])
+		var msg Message
+		json.Unmarshal(tmp[0:n], &msg)
+		d.handleMessage(msg, conn)
+
+	}
+
+}
+*/
+
+func  (d *DistNetworks)StartServerWS(){
+	log.Println("***d.CurrentServ",d.CurrentServ)
+	for _, v := range d.CurrentServ {
+		if d.SID == v {
+			log.Println("************the Fd&paxos have been started")
+			d.start()
+		}
+	}
+
+	
+	defer d.Hub.CloseConn()//close all the client connections
+	go d.Hub.Run()
+	//set route for react clients and other servers
+	http.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
+		log.Println("got new connection from clients and other servers")
+		server.ServeWs(d.Hub, w, r)//handles websocket requests from the react clients.
+	})
+/*
+	//set route for go clients
+	http.HandleFunc("/wsgo", func(w http.ResponseWriter, r *http.Request) {
+		log.Println("got new connection from go clients")
+		server.ServeWsGoClient(hub, w, r)//handles websocket requests from the go clients.
+	})
+*/
+	log.Println("server started ... ")
+	addr := d.AllNodeInfo.ServerAddrmap[d.SID]
+	err := http.ListenAndServe(addr, nil)
+	if err != nil {
+		log.Println("err in StartServerWS",err)
+		panic(err)
+	}
+
+}
+
+//dial all other current severs to send the messages
+func (d *DistNetworks) startClientWS(){
+
+	for _,v := range d.CurrentServ{	
+		if v!=d.SID{
+			log.Println("****startClientWS()",v,d.SID)
+			addr := d.AllNodeInfo.ServerAddrmap[v]
+			clientws, err := client.NewWebSocketClient(addr, "ws")
+			if err != nil {
+				panic(err)
+			}
+			d.ClientWSMap[v]=clientws
+		}
+
+	}	
+	log.Println("Connecting")
+}
+
+//send messages to a single serverWS specified
+func (d *DistNetworks) sendMsgToServerWS(msg server.Message, sID int ){
+	//if no connection with the specified server, dial the server
+	if _, ok := d.ClientWSMap[sID]; !ok {
+		addr := d.AllNodeInfo.ServerAddrmap[sID]
+		clientws, err := client.NewWebSocketClient(addr, "ws")
+		if err != nil {
+			panic(err)
+		}
+		d.ClientWSMap[sID]=clientws
+	}
+		
+	err:=d.ClientWSMap[sID].Write(msg)
+	if err != nil {
+		log.Println("error in sendMsgToServerWS",err)
+		//panic(err)
+	}
+	
+
+}
+
+//broadcast msg to all current web servers
+func (d *DistNetworks) broadcastToServerWS(msg server.Message){
+	
+			for _, v := range d.CurrentServ {
+				if v != d.SID {
+					d.ClientWSMap[v].Write(msg)
+				}
+			}
+		
+	
+}
+
+//send messages to a single react clients
+func (d *DistNetworks) sendMsgToReactClient(msg server.Message, cID string){
+	d.Hub.DeliverToSend(msg, cID)
+
+	
+}
+//broadcast to all react clients
+func (d *DistNetworks) broadcastToReactClient(msg server.Message){
+	d.Hub.DeliverToBC(msg)
+}
+//deplexing the incoming data from the network
+func (d *DistNetworks) handleMessage(msg server.Message) *server.Message {
+	//log.Println("*********handleMessge()--msg.Command", msg)
+	//log.Println("*********---handleMessge()-----leader:", d.Ld.Leader())
+	switch msg.Command {
+
+	case "CLIENT":
+		log.Println("-----received CLIENT msg", msg)
+		params := msg.Parameter.(map[string]interface{})
+		cID := params["ClientID"].(string)
+		//cAddr := params["ClientAddr"].(string)
+		//cInfo := ClientInfo{ClientID: cID, ClientAddr: cAddr}
+		
+
+		if d.SID!= d.Ld.Leader() {
+			//todo:send LEADER address to the client to inform the leader address
+			msg := server.Message{Command: "LEADER", Parameter: d.NdInfo.ServerAddrmap[d.Ld.Leader()]}
+			go d.sendMsgToReactClient(msg,cID)
+		} else {
+			//store the client address if it is a leader
+			//log.Println("reflect.TypeOf cAddr", reflect.TypeOf(cAddr))
+			//d.ClientAddrmap[cID] = cAddr
+			//log.Println("CLIENT msg:clientID, cAddr.String()", clientID, cAddr)
+		}
+		break
+
+	case "HEARTBEAT":
+		params := msg.Parameter.(map[string]interface{})
+		from := int(params["From"].(float64))
+		to := int(params["To"].(float64))
+		request := params["Request"].(bool)
+		//extract the information from the params and change to the heartbeat format
+		hb := failuredetector.Heartbeat{From: from, To: to, Request: request}
+		d.Fd.DeliverHeartbeat(hb)
+		//log.Println("successfully delivered the heart beat", hb)
+		//log.Println(" HEARTBEAT translated ", hb)
+		break
+	case "VALUE":
+		//todo: A client should be redirected if it connect
+		//or send a request to a non-leader node.
+		//extract the information from the params and change to the required format
+		log.Println("Received VALUE msg", msg)
+		params := msg.Parameter.(map[string]interface{})
+		cID := params["ClientID"].(string)
+
+		cSq := int(params["ClientSeq"].(float64))
+		log.Println("cSq",cSq)
+		noop := params["Noop"].(bool)
+
+		accNo := int(params["AccountNum"].(float64))
+		log.Println("accNo ",accNo )
+
+		paramsTxn := params["Txn"].(map[string]interface{})
+		op := bank.Operation(paramsTxn["Op"].(float64))
+		log.Println("op",op)
+		amount := int(paramsTxn["Amount"].(float64))
+		log.Println("Amount",amount)
+		txn := bank.Transaction{Op: op, Amount: amount}
+		val := multipaxos.Value{ClientID: cID, ClientSeq: cSq, Noop: noop, AccountNum: accNo, Txn: txn}
+		log.Println(" VALUE translated ", val)
+		//receive the value from the client, if not leader,
+		if d.SID != d.Ld.Leader() {
+			//forwards the value request to the leader
+			log.Println("Forwards the value to leader...")
+			msgRecstrut := server.Message{Command: "VALUE", Parameter: val}
+			go d.sendMsgToServerWS(msgRecstrut,d.Ld.Leader())
+			//send leader message to the client to inform the leader address
+			msgLeader := server.Message{Command: "LEADER", Parameter: d.NdInfo.ServerAddrmap[d.Ld.Leader()]}
+			
+			// cAddr := conn.RemoteAddr().String()
+			// log.Println("sendMsg()---leader msg", cAddr, conn.RemoteAddr())
+
+			go d.sendMsgToReactClient(msgLeader, cID)
+			//log.Println("sendMsg()---leader msg", msgLeader)
+			//log.Println("sendMsg()---remote address of the connection ", conn.RemoteAddr())
+		} else {
+			//log.Println("DeliverClientValue(val)")
+			d.Proposer.DeliverClientValue(val)
+		}
+		break
+
+	case "PROMISE":
+		//log.Println("received PROMISE msg", msg)
+		params := msg.Parameter.(map[string]interface{})
+		from := int(params["From"].(float64))
+		to := int(params["To"].(float64))
+		rnd := multipaxos.Round(params["Rnd"].(float64))
+		var slot []multipaxos.PromiseSlot
+		if params["Slots"] == nil {
+			slot = nil
+		} else {
+			//log.Println(" PROMISE translated params[Slots]: ", params["Slots"])
+			//log.Println("reflect.TypeOf params[Slots]", reflect.TypeOf(params["Slots"]))
+
+			for _, item := range params["Slots"].([]interface{}) {
+				paramsSlots := item.(map[string]interface{})
+				id := multipaxos.SlotID(paramsSlots["ID"].(float64))
+				vrnd := multipaxos.Round(paramsSlots["Vrnd"].(float64))
+				paramsVal := paramsSlots["Vval"].(map[string]interface{})
+				cID := paramsVal["ClientID"].(string)
+				cSq := int(paramsVal["ClientSeq"].(float64))
+				noop := paramsVal["Noop"].(bool)
+				accNo := int(paramsVal["AccountNum"].(float64))
+				paramsTxn := paramsVal["Txn"].(map[string]interface{})
+				op := bank.Operation(paramsTxn["Op"].(float64))
+				amount := int(paramsTxn["Amount"].(float64))
+				txn := bank.Transaction{Op: op, Amount: amount}
+				vval := multipaxos.Value{ClientID: cID, ClientSeq: cSq, Noop: noop, AccountNum: accNo, Txn: txn}
+				prmslot := multipaxos.PromiseSlot{ID: id, Vrnd: vrnd, Vval: vval}
+				slot = append(slot, prmslot)
+			}
+		}
+
+		prm := multipaxos.Promise{From: from, To: to, Rnd: rnd, Slots: slot}
+		//log.Println(" PROMISE translated ", prm)
+		d.Proposer.DeliverPromise(prm)
+		break
+	case "PREPARE":
+		params := msg.Parameter.(map[string]interface{})
+		from := int(params["From"].(float64))
+		crnd := multipaxos.Round(params["Crnd"].(float64))
+		slot := multipaxos.SlotID(params["Slot"].(float64))
+		prep := multipaxos.Prepare{From: from, Slot: slot, Crnd: crnd}
+		d.Acceptor.DeliverPrepare(prep)
+		//log.Println(" PREPARE translated ", prep)
+		break
+	case "ACCEPT":
+		log.Println(" ACCEPT  ", msg)
+		params := msg.Parameter.(map[string]interface{})
+		from := int(params["From"].(float64))
+		slot := multipaxos.SlotID(params["Slot"].(float64))
+		rnd := multipaxos.Round(params["Rnd"].(float64))
+		paramsVal := params["Val"].(map[string]interface{})
+		cID := paramsVal["ClientID"].(string)
+		cSq := int(paramsVal["ClientSeq"].(float64))
+		noop := paramsVal["Noop"].(bool)
+		accNo := int(paramsVal["AccountNum"].(float64))
+		paramsTxn := paramsVal["Txn"].(map[string]interface{})
+		op := bank.Operation(paramsTxn["Op"].(float64))
+		amount := int(paramsTxn["Amount"].(float64))
+		txn := bank.Transaction{Op: op, Amount: amount}
+		val := multipaxos.Value{ClientID: cID, ClientSeq: cSq, Noop: noop, AccountNum: accNo, Txn: txn}
+		acc := multipaxos.Accept{From: from, Slot: slot, Rnd: rnd, Val: val}
+		//log.Println(" ACCEPT translated ", acc)
+		d.Acceptor.DeliverAccept(acc)
+		break
+	case "LEARN":
+		//log.Println(" LEARN--handlemsg ", msg)
+		params := msg.Parameter.(map[string]interface{})
+		from := int(params["From"].(float64))
+		slot := multipaxos.SlotID(params["Slot"].(float64))
+		rnd := multipaxos.Round(params["Rnd"].(float64))
+		paramsVal := params["Val"].(map[string]interface{})
+		cID := paramsVal["ClientID"].(string)
+		cSq := int(paramsVal["ClientSeq"].(float64))
+		noop := paramsVal["Noop"].(bool)
+		accNo := int(paramsVal["AccountNum"].(float64))
+		paramsTxn := paramsVal["Txn"].(map[string]interface{})
+		op := bank.Operation(paramsTxn["Op"].(float64))
+		amount := int(paramsTxn["Amount"].(float64))
+		txn := bank.Transaction{Op: op, Amount: amount}
+		val := multipaxos.Value{ClientID: cID, ClientSeq: cSq, Noop: noop, AccountNum: accNo, Txn: txn}
+		ln := multipaxos.Learn{From: from, Slot: slot, Rnd: rnd, Val: val}
+		//log.Println(" LEARN translated ", ln)
+		d.Learner.DeliverLearn(ln)
+		break
+
+	case "RECONFIG":
+		params := msg.Parameter.(map[string]interface{})
+		newerServStr := params["NewerServStr"].(string)
+		//log.Println("params[Timestamp]", params["Timestamp"])
+		//log.Println("reflect.TypeOf params[Timestamp]", reflect.TypeOf(params["Timestamp"]))
+
+		ts := int(params["Timestamp"].(float64))
+		//log.Println("reflect.TypeOf params[Timestamp]", reflect.TypeOf(ts), ts)
+		reconf := Reconf{
+			Timestamp:    ts,
+			NewerServStr: newerServStr,
+		}
+		log.Println("***-------------handle message()")
+		log.Println("receive reconf msg", reconf)
+		d.ReconfIn <- reconf
+		break
+
+	case "NEWCONFIG":
+		params := msg.Parameter.(map[string]interface{})
+		from := int(params["From"].(float64))
+		paramsStat := params["Stat"].(map[string]interface{})
+		ts := int(paramsStat["Timestamp"].(float64))
+		oldSer := paramsStat["OlderServer"].([]interface{})
+		oSList := []int{}
+		for _, item := range oldSer {
+			oSList = append(oSList, int(item.(float64)))
+		}
+		newSer := paramsStat["NewerServer"].([]interface{})
+		nSList := []int{}
+		for _, item := range newSer {
+			nSList = append(nSList, int(item.(float64)))
+		}
+		newconf := Newconf{
+			From: from,
+			Stat: State{
+				Timestamp:   ts,
+				OlderServer: oSList,
+				NewerServer: nSList,
+			},
+		}
+		d.NewconfIn <- newconf
+		//log.Println("***-------------handle message()---newconf", newconf)
+		break
+
+	case "CPROMISE":
+		params := msg.Parameter.(map[string]interface{})
+		to := int(params["To"].(float64))
+		paramsStat := params["Stat"].(map[string]interface{})
+		ts := int(paramsStat["Timestamp"].(float64))
+		oldSer := paramsStat["OlderServer"].([]interface{})
+		oSList := []int{}
+		for _, item := range oldSer {
+			oSList = append(oSList, int(item.(float64)))
+		}
+
+		newSer := paramsStat["NewerServer"].([]interface{})
+		nSList := []int{}
+		for _, item := range newSer {
+			nSList = append(nSList, int(item.(float64)))
+		}
+
+		adu := int(paramsStat["Adu"].(float64))
+
+		aInfo := make(map[int]bank.Account)
+		for _, item := range paramsStat["AccountMap"].(map[string]interface{}) {
+			//log.Println(" key, item ", key, item)
+			p := item.(map[string]interface{})
+			bal := int(p["Balance"].(float64))
+			num := int(p["Number"].(float64))
+			//log.Println(" bal, num ", bal, num)
+			a := bank.Account{Number: num,
+				Balance: bal,
+			}
+			aInfo[num] = a
+
+		}
+
+		checkPoint := make(map[int]multipaxos.DecidedValue)
+		for key, item := range paramsStat["CheckPoint"].(map[string]interface{}) {
+			//log.Println(" key, item ", key, item)
+			k, _ := strconv.Atoi(key)
+			p := item.(map[string]interface{})
+			slotId := int(p["SlotID"].(float64))
+			paramsVal := p["Value"].(map[string]interface{})
+			cID := paramsVal["ClientID"].(string)
+			cSq := int(paramsVal["ClientSeq"].(float64))
+			noop := paramsVal["Noop"].(bool)
+			accNo := int(paramsVal["AccountNum"].(float64))
+			paramsTxn := paramsVal["Txn"].(map[string]interface{})
+			op := bank.Operation(paramsTxn["Op"].(float64))
+			amount := int(paramsTxn["Amount"].(float64))
+			txn := bank.Transaction{Op: op, Amount: amount}
+			val := multipaxos.Value{ClientID: cID, ClientSeq: cSq, Noop: noop, AccountNum: accNo, Txn: txn}
+			dcVal := multipaxos.DecidedValue{
+				SlotID: multipaxos.SlotID(slotId),
+				Value:  val,
+			}
+			checkPoint[k] = dcVal
+		}
+
+		cPrm := CPromise{
+			To: to,
+			Stat: State{
+				Timestamp:   ts,
+				OlderServer: oSList,
+				NewerServer: nSList,
+				Adu:         adu,
+				CheckPoint:  checkPoint,
+				AccountMap:  aInfo,
+			},
+		}
+		d.CPromiseIn <- cPrm
+		//log.Println("***-------------handle message()--cPrm", cPrm.Stat.Timestamp)
+		//log.Println("cPrm ", cPrm)
+		break
+
+	case "ACTIVIATE":
+		params := msg.Parameter.(map[string]interface{})
+		from := int(params["From"].(float64))
+		paramsStat := params["Stat"].(map[string]interface{})
+		ts := int(paramsStat["Timestamp"].(float64))
+		oldSer := paramsStat["OlderServer"].([]interface{})
+		oSList := []int{}
+		for _, item := range oldSer {
+			oSList = append(oSList, int(item.(float64)))
+		}
+
+		newSer := paramsStat["NewerServer"].([]interface{})
+		nSList := []int{}
+		for _, item := range newSer {
+			nSList = append(nSList, int(item.(float64)))
+		}
+
+		adu := int(paramsStat["Adu"].(float64))
+
+		aInfo := make(map[int]bank.Account)
+		for _, item := range paramsStat["AccountMap"].(map[string]interface{}) {
+			//log.Println(" key, item ", key, item)
+			p := item.(map[string]interface{})
+			bal := int(p["Balance"].(float64))
+			num := int(p["Number"].(float64))
+			//log.Println(" bal, num ", bal, num)
+			a := bank.Account{Number: num,
+				Balance: bal,
+			}
+			aInfo[num] = a
+
+		}
+		/*
+			dcVmap := make(map[int]multipaxos.DecidedValue)
+			for _, item := range paramsStat["DcVmap"].(map[string]interface{}) {
+				//log.Println(" key, item ", key, item)
+
+				p := item.(map[string]interface{})
+				slotId := int(p["SlotID"].(float64))
+				paramsVal := p["Value"].(map[string]interface{})
+				cID := paramsVal["ClientID"].(string)
+				cSq := int(paramsVal["ClientSeq"].(float64))
+				noop := paramsVal["Noop"].(bool)
+				accNo := int(paramsVal["AccountNum"].(float64))
+				paramsTxn := paramsVal["Txn"].(map[string]interface{})
+				op := bank.Operation(paramsTxn["Op"].(float64))
+				amount := int(paramsTxn["Amount"].(float64))
+				txn := bank.Transaction{Op: op, Amount: amount}
+				val := multipaxos.Value{ClientID: cID, ClientSeq: cSq, Noop: noop, AccountNum: accNo, Txn: txn}
+				dcVal := multipaxos.DecidedValue{
+					SlotID: multipaxos.SlotID(slotId),
+					Value:  val,
+				}
+				dcVmap[slotId] = dcVal
+			}
+		*/
+		checkPoint := make(map[int]multipaxos.DecidedValue)
+		for key, item := range paramsStat["CheckPoint"].(map[string]interface{}) {
+			//log.Println(" key, item ", key, item)
+			k, _ := strconv.Atoi(key)
+			p := item.(map[string]interface{})
+			slotId := int(p["SlotID"].(float64))
+			paramsVal := p["Value"].(map[string]interface{})
+			cID := paramsVal["ClientID"].(string)
+			cSq := int(paramsVal["ClientSeq"].(float64))
+			noop := paramsVal["Noop"].(bool)
+			accNo := int(paramsVal["AccountNum"].(float64))
+			paramsTxn := paramsVal["Txn"].(map[string]interface{})
+			op := bank.Operation(paramsTxn["Op"].(float64))
+			amount := int(paramsTxn["Amount"].(float64))
+			txn := bank.Transaction{Op: op, Amount: amount}
+			val := multipaxos.Value{ClientID: cID, ClientSeq: cSq, Noop: noop, AccountNum: accNo, Txn: txn}
+			dcVal := multipaxos.DecidedValue{
+				SlotID: multipaxos.SlotID(slotId),
+				Value:  val,
+			}
+			checkPoint[k] = dcVal
+		}
+
+		actv := Activiate{
+			From: from,
+			Stat: State{
+				Timestamp:   ts,
+				OlderServer: oSList,
+				NewerServer: nSList,
+				Adu:         adu,
+				CheckPoint:  checkPoint,
+				AccountMap:  aInfo,
+			},
+		}
+		d.ActIn <- actv
+		//log.Println("***-------------handle message()-----actv", actv.Stat.Timestamp)
+		log.Println("receive actviation msg ", actv.Stat.Timestamp)
+		break
+
+	}
+
+	return nil
+}
+/*
+func (d *DistNetworks) sendMsg(msg Message, sendAddr []string) {
+	//encode
+	//log.Println("start to sendMsg", msg)
+	msgByte, err := json.Marshal(msg)
+	if err != nil {
+		log.Fatal(" Encoding err: ", err)
+	}
+
+	for _, v := range sendAddr {
+		conn, err := net.Dial("tcp", v)
+		if err != nil {
+			if msg.Command == "LEADER" {
+				log.Println("*-------sendMsg()", msg)
+				log.Println("fail to connect the address:", err, v, sendAddr)
+			}
+			//log.Println("*-------sendMsg()", msg)
+			//log.Println("fail to connect the address:", err, v)
+			continue
+		}
+		//log.Println("*****in sendMsg ")
+		//log.Println("sendMsg()---local address of the connection ", conn.LocalAddr())
+		//log.Println("sendMsg()---remote address of the connection ", conn.RemoteAddr())
+		defer conn.Close()
+		_, err = conn.Write(msgByte)
+		//log.Println("succesfully send the message of bytes:", n, msg, msgByte)
+		if err != nil {
+			log.Println("*-------sendMsg()")
+			log.Println("fail to send the message:", err, msg)
+			continue
+		}
+	}
+
+}
+*/
+//handle all the channel
+func (d *DistNetworks) handleChan(){
+
+	for {
+		//log.Println("***************handle all out channel&ld subscribe")
+		//log.Println("the current leader:", d.Ld.Leader())
+		//log.Println("d.ClientAddrmap:", d.ClientAddrmap)
+
+		select {
+		case msg := <-d.MsgIn:
+			d.handleMessage(msg)
+		case beat := <-d.Hbout:
+			//log.Println("*****beat := <-d.Hbout", beat)
+			if beat.To == beat.From {
+				d.Fd.DeliverHeartbeat(beat)
+				//log.Println("HB to oneself", beat)
+
+				continue
+			}
+			msg := server.Message{Command: "HEARTBEAT", Parameter: beat}
+			
+			sID := beat.To
+			go d.sendMsgToServerWS(msg, sID)
+
+		case sub := <-d.LdSubscribe:
+			fmt.Println("handleChan() ***********************New leader: %v\n", sub)
+		case pre := <-d.PrepareOut:
+			//log.Println("PrepareOut", pre)
+			d.Acceptor.DeliverPrepare(pre)
+			msg := server.Message{Command: "PREPARE", Parameter: pre}
+			
+			go d.broadcastToServerWS(msg)
+
+		case prm := <-d.PromiseOut:
+			//log.Println("PromiseOut", prm)
+			if prm.To==d.SID{
+				d.Proposer.DeliverPromise(prm)
+			}else{			
+				msg := server.Message{Command: "PROMISE", Parameter: prm}
+				sID:= prm.To
+				go d.sendMsgToServerWS(msg, sID)
+			}		
+
+		case acc := <-d.AcceptOut:
+			//log.Println("AcceptOut", acc)
+			d.Acceptor.DeliverAccept(acc)
+			msg := server.Message{Command: "ACCEPT", Parameter: acc}
+	
+			go d.broadcastToServerWS(msg)
+
+		case ln := <-d.LearnOut:
+			//log.Println("LearnOut", ln)
+			d.Learner.DeliverLearn(ln)
+			msg := server.Message{Command: "LEARN", Parameter: ln}
+			go d.broadcastToServerWS(msg)
+
+		case dcV := <-d.DecidedOut:
+			d.handleDecidedValue(dcV)
+
+		//receive reconf msg, if it is leader and the msg has newer state,
+		//then send newconfig msg to olderserver
+		//if it is not leader, forwards to leader
+		case reconf := <-d.ReconfIn:
+			log.Println("*******---------case reconf := <-d.ReconfIn")
+			if d.SID == d.Ld.Leader() {
+				//if reconf.Timestamp.After(d.TimeReconf) {
+				if reconf.Timestamp > d.TimeReconf {
+					d.Quorum = len(d.CurrentServ)/2 + 1
+
+					//convert the NewerServStr string to the list
+					newerSerList := []int{}
+					s := strings.Split(reconf.NewerServStr, ",")
+					//log.Println(s)
+					for _, v := range s {
+						vInt, _ := strconv.Atoi(v)
+						newerSerList = append(newerSerList, vInt)
+					}
+					//log.Println(newerSerList)
+
+					//send newconfig msg to older servers
+					newconf := Newconf{
+						From: d.SID,
+						Stat: State{
+							Timestamp:   reconf.Timestamp,
+							OlderServer: d.CurrentServ,
+							NewerServer: newerSerList,
+						},
+					}
+					d.NewconfIn <- newconf
+					msg := server.Message{Command: "NEWCONFIG", Parameter: newconf}
+					log.Println("msg", msg)
+					go d.broadcastToServerWS(msg)
+				}
+			} else {
+				//forwards reconfig msg to leader
+				msg := server.Message{Command: "RECONFIG", Parameter: reconf}
+				log.Println("msg", msg)
+				sID :=d.Ld.Leader()
+				go d.sendMsgToServerWS(msg , sID  )
+
+			}
+
+		case newconf := <-d.NewconfIn:
+			//log.Println("*******---------case newconf := <-d.NewconfIn")
+			//receive newconf msg, send cpromise message
+			//which contains the state of the server, to the newconfig msg sender
+			d.Fd.Stop()
+			d.Proposer.Stop()
+			d.Acceptor.Stop()
+			d.Learner.Stop()
+			log.Println("Fd and paxos had been stopped")
+			//log.Println("d.Adu,d.CheckPoint", d.Adu, d.CheckPoint)
+			stat := State{
+				Timestamp:   newconf.Stat.Timestamp,
+				OlderServer: newconf.Stat.OlderServer,
+				NewerServer: newconf.Stat.NewerServer,
+				Adu:         d.Adu,
+				CheckPoint:  d.CheckPoint,
+				AccountMap:  d.AccountMap,
+			}
+			/*
+				d.CPromiseOut <- CPromise{
+					To:   newconf.From,
+					Stat: stat,
+				}
+
+			*/
+			cPrm := CPromise{
+				To:   newconf.From,
+				Stat: stat,
+			}
+			msg := server.Message{Command: "CPROMISE", Parameter: cPrm}
+			//log.Println("msg", msg)
+			sID:=cPrm.To
+			go d.sendMsgToServerWS(msg , sID)
+			/*
+				case cPrm := <-d.CPromiseOut:
+					//cpromise message contains the state of the server, and is delivered to the newconfig sender
+					msg := Message{Command: "CPROMISE", Parameter: cPrm}
+					sendAddr := []string{}
+					add := d.NdInfo.ServerAddrmap[cPrm.To]
+					sendAddr = append(sendAddr, add)
+					go d.sendMsg(msg, sendAddr)
+			*/
+		case cPrm := <-d.CPromiseIn:
+			//log.Println("*******---------cPrm := <-d.CPromiseIn")
+			d.handleCPrmIn(cPrm)
+			//d.ActOut<-actv
+			/*
+				case actv := <-d.ActOut:
+					//send the actv message to all newer servers
+					msg := Message{Command: "ACTIVIATE", Parameter: actv}
+					newerSer:=actv.Stat.NewerServer
+					sendAddr := []string{}
+					for _, v := range newerSer {
+						addr :=d.AllNodeInfo.ServerAddrmap[v]
+						sendAddr = append(sendAddr, addr)
+					}
+					go d.sendMsg(msg, sendAddr)
+			*/
+		case actv := <-d.ActIn:
+			//log.Println("*******---------actv := <-d.ActIn")
+			//actv.Timestamp>=d.TimeReconf
+			//if actv.Stat.Timestamp.After(d.TimeReconf) || actv.Stat.Timestamp.Equal(d.TimeReconf) {
+			if actv.Stat.Timestamp >= d.TimeReconf {
+				if actv.Stat.Adu >= d.Adu {
+					//update states
+					d.TimeReconf = actv.Stat.Timestamp
+					d.CurrentServ = actv.Stat.NewerServer
+					d.Adu = actv.Stat.Adu
+					d.CheckPoint = actv.Stat.CheckPoint
+					d.AccountMap = actv.Stat.AccountMap
+					//update current server address map NI
+					serverAddrmap := make(map[int]string)
+					for _, v := range d.CurrentServ {
+						serverAddrmap[v] = d.AllNodeInfo.ServerAddrmap[v]
+					}
+					//log.Println("---updated serverAddrmap", serverAddrmap)
+					NI := NodesInfo{ServerIDlist: d.CurrentServ,
+						ServerAddrmap: serverAddrmap,
+					}
+					d.NdInfo = NI//store current server nodes info
+					//log.Println("---updated  d.NdInfo", d.NdInfo)
+					//renewFd&Ld&paxos
+					sIDL := d.NdInfo.ServerIDlist
+					nrOfNodes := len(d.NdInfo.ServerAddrmap)
+					adu := d.Adu
+					/*
+						d.Ld = leaderdetector.NewMonLeaderDetector(sIDL)
+						d.Fd = failuredetector.NewEvtFailureDetector(sID, sIDL, d.Ld, delay, hbsend)
+						d.Proposer = multipaxos.NewProposer(int(sID), nrOfNodes, adu, leadDect, prepareOut, acceptOut)
+						d.Acceptor = multipaxos.NewAcceptor(int(sID), promiseOut, learnOut)
+						d.Learner = multipaxos.NewLearner(int(sID), nrOfNodes, decidedOut)
+						d.LdSubscribe = d.Ld.Subscribe()
+					*/
+
+					d.Fd.Reconfig(sIDL)
+					d.Ld.Reconfig(sIDL)
+					//d.Proposer.Reconfig(nrOfNodes, adu)
+					d.Proposer = *multipaxos.NewProposer(d.SID, nrOfNodes, adu, &d.Ld, d.PrepareOut, d.AcceptOut)
+					// if not reconfig the learner the reconfiguration seems still works
+					d.Learner.Reconfig(nrOfNodes)
+
+					//start paxos and Ld
+					d.start()
+			
+				} else {
+					stat := State{
+						Timestamp:   actv.Stat.Timestamp,
+						OlderServer: actv.Stat.OlderServer,
+						NewerServer: actv.Stat.NewerServer,
+						Adu:         d.Adu,
+						CheckPoint:  d.CheckPoint,
+						AccountMap:  d.AccountMap,
+					}
+					/*
+						d.CPromiseOut <- CPromise{
+							To:   newconf.From,
+							Stat: stat,
+						}
+
+					*/
+					cPrm := CPromise{
+						To:   actv.From,
+						Stat: stat,
+					}
+					msg := server.Message{Command: "CPROMISE", Parameter: cPrm}
+					//log.Println("*******---------actv := <-d.ActIn")
+					log.Println("has newer state...send it as cpromise")
+					log.Println("msg", cPrm.Stat.Timestamp)
+					go d.sendMsgToServerWS(msg, cPrm.To)
+				}
+			}
+		}
+	}
+}
+
+//handle the incoming CPromise, select the one with the highest Adu
+func (d *DistNetworks) handleCPrmIn(cPrm CPromise) {
+	//cPrm.Stat.Timestamp>=d.TimeReconf
+	//store the Cprm in the map, when it receives more than or equal number of Quorum Cprm
+	//it begins to vote for the newest state
+	//log.Println("*****----------handleCPrmIn")
+	if cPrm.Stat.Timestamp >= d.TimeReconf {
+		//log.Println("cPrm.Stat.Timestamp,d.TimeReconf", cPrm.Stat.Timestamp, d.TimeReconf)
+		if d.CprmMap[cPrm.Stat.Timestamp] == nil {
+			//log.Println("d.CprmMap[cPrm.Stat.Timestamp]", d.CprmMap[cPrm.Stat.Timestamp])
+			d.CprmMap[cPrm.Stat.Timestamp] = []CPromise{}
+			d.CprmMap[cPrm.Stat.Timestamp] = append(d.CprmMap[cPrm.Stat.Timestamp], cPrm)
+		} else {
+			d.CprmMap[cPrm.Stat.Timestamp] = append(d.CprmMap[cPrm.Stat.Timestamp], cPrm)
+			if len(d.CprmMap[cPrm.Stat.Timestamp]) >= d.Quorum {
+				//log.Println("------------start to poll the newest state")
+				//poll for the highest states and return it
+				var stat State
+				stat.Adu = -1
+				for _, v := range d.CprmMap[cPrm.Stat.Timestamp] {
+					if v.Stat.Adu > stat.Adu {
+						stat = v.Stat
+					}
+				}
+				//log.Println("length of d.CprmMap", len(d.CprmMap), len(d.CprmMap[cPrm.Stat.Timestamp]))
+				//log.Println("-----------the newest state", stat)
+
+				//store the decided state to the DcStatMap
+
+				//if there is no state elected for the corresponding timestamp
+				//or the state is newer than the previously decided state
+				//if (d.DcStatMap[stat.Timestamp] == State{}) || stat.Adu > d.DcStatMap[stat.Timestamp].Adu {
+				if (cmp.Equal(d.DcStatMap[stat.Timestamp], State{})) || stat.Adu > d.DcStatMap[stat.Timestamp].Adu {
+
+					d.DcStatMap[stat.Timestamp] = stat
+					//send activate msg
+					actv := Activiate{
+						From: d.SID,
+						Stat: stat,
+					}
+					msg := server.Message{Command: "ACTIVIATE", Parameter: actv}
+					newerSer := actv.Stat.NewerServer
+					log.Println("-------gonging to send msg ACTIVIATE", actv.Stat.Timestamp)
+					for _, v := range newerSer {
+						go d.sendMsgToServerWS(msg, v)
+					}
+				}
+			}
+		}
+	}
+}
+
+/*
+func (d *DistNetworks) handleDecidedValue(dcV multipaxos.DecidedValue) {
+
+	log.Println("----handleDecidedValue")
+	//log.Println("d.Adu", d.Adu)
+	//log.Println("SId,leader", d.Mycon.SId, d.Ld.Leader())
+
+	//log.Println("d.CheckPoint ", d.CheckPoint)
+	var res multipaxos.Response
+	if int(dcV.SlotID) > d.Adu+1 {
+		d.dcVmap[int(dcV.SlotID)] = dcV //only store the value that do not handled or executed
+		return
+	}
+	if dcV.Value.Noop == false {
+		//todo:process the command from the received value
+		a := d.AccountMap[dcV.Value.AccountNum]
+		if a == (bank.Account{}) {
+			log.Println("No such account exists!")
+			res = multipaxos.Response{
+				ClientID:  dcV.Value.ClientID,
+				ClientSeq: dcV.Value.ClientSeq,
+				TxnRes: bank.TransactionResult{
+					dcV.Value.AccountNum,
+					0,
+					log.Sprintf("No such account exists!"),
+				},
+			}
+
+		} else {
+
+			//log.Println("The command has been processed in Server", d.Mycon.SId)
+
+			//if the decided value has already been executed, then do not store the result in the accountmap
+			for _, v := range d.CheckPoint {
+				log.Println("---the checkpoint", v)
+				if v.Value.ClientID == dcV.Value.ClientID && v.Value.ClientSeq == dcV.Value.ClientSeq {
+					res = v
+				} else {
+
+					txnResult := a.Process(dcV.Value.Txn)
+					log.Println(txnResult.String())
+					d.AccountMap[dcV.Value.AccountNum] = bank.Account{
+						Number:  dcV.Value.AccountNum,
+						Balance: txnResult.Balance,
+					}
+					res = multipaxos.Response{
+						ClientID:  dcV.Value.ClientID,
+						ClientSeq: dcV.Value.ClientSeq,
+						TxnRes:    txnResult,
+					}
+				}
+			}
+
+				txnResult := a.Process(dcV.Value.Txn)
+				//log.Println("The command has been processed in Server", d.Mycon.SId)
+				log.Println(txnResult.String())
+				d.AccountMap[dcV.Value.AccountNum] = bank.Account{
+					Number:  dcV.Value.AccountNum,
+					Balance: txnResult.Balance,
+				}
+
+
+		}
+
+
+		//sometimes, the leader falis to receive the client address,
+		//as a result the leader can not send the response to the Clients
+		//a better solution is to let all the servers send the response to the clients
+		d.CheckPoint[int(d.Adu)] = res //store all the response
+		msg := Message{Command: "RESPONSE", Parameter: res}
+		sendAddr := []string{}
+
+		for _, v1 := range d.ClientAddrmap {
+			sendAddr = append(sendAddr, v1)
+		}
+		log.Println("-----send response,msg:addr", msg, sendAddr)
+		d.sendMsg(msg, sendAddr)
+		d.Adu++
+		d.Proposer.IncrementAllDecidedUpTo()
+	}
+
+	if (d.dcVmap[d.Adu+1] != multipaxos.DecidedValue{}) {
+		d.handleDecidedValue(d.dcVmap[d.Adu+1])
+	}
+}
+*/
+
+func (d *DistNetworks) handleDecidedValue(dcV multipaxos.DecidedValue) {
+
+	log.Println("----handleDecidedValue")
+	d.CheckPoint[int(d.Adu)] = dcV
+	var res multipaxos.Response
+	if int(dcV.SlotID) > d.Adu+1 {
+		d.dcVmap[int(dcV.SlotID)] = dcV
+		return
+	}
+	if dcV.Value.Noop == false {
+		//todo:process the command from the received value
+		a := d.AccountMap[dcV.Value.AccountNum]
+		if a == (bank.Account{}) {
+			log.Println("No such account exists!")
+			res = multipaxos.Response{
+				ClientID:  dcV.Value.ClientID,
+				ClientSeq: dcV.Value.ClientSeq,
+				TxnRes: bank.TransactionResult{
+					dcV.Value.AccountNum,
+					0,
+					fmt.Sprintf("No such account exists!"),
+				},
+			}
+
+		} else {
+			txnResult := a.Process(dcV.Value.Txn)
+			//log.Println("The command has been processed in Server", d.Mycon.SId)
+			log.Println(txnResult.String())
+			d.AccountMap[dcV.Value.AccountNum] = bank.Account{
+				Number:  dcV.Value.AccountNum,
+				Balance: txnResult.Balance,
+			}
+
+			res = multipaxos.Response{
+				ClientID:  dcV.Value.ClientID,
+				ClientSeq: dcV.Value.ClientSeq,
+				TxnRes:    txnResult,
+			}
+
+		}
+
+		//sometimes, the leader falis to receive the client address,
+		//as a result the leader can not send the response to the Clients
+		//a better solution is to let all the servers send the response to the clients
+
+		msg := server.Message{Command: "RESPONSE", Parameter: res}
+		if d.SID== d.Ld.Leader(){
+			go d.broadcastToReactClient(msg)
+		}
+		
+
+		d.Adu++
+		d.Proposer.IncrementAllDecidedUpTo()
+	}
+
+	if (d.dcVmap[d.Adu+1] != multipaxos.DecidedValue{}) {
+		d.handleDecidedValue(d.dcVmap[d.Adu+1])
+	}
+}
