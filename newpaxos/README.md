@@ -27,18 +27,6 @@ Especially the prepare-promise exchange need changes.
 
 Three Paxos roles: `Proposer`, `Acceptor` and `Learner`.
 
-```go
-type Value struct {
-	ClientID  string
-	ClientSeq int
- 	Noop      bool
-	Command   string
-}
-```
-
-The `Value` type now also carries information about the client that sent the
-command.
-
 The `Prepare`, `Accept` and `Learn` messages have all gotten a `Slot` field of
 type `SlotID`. This means that every `Accept` and `Learn` message now relates
 to a specific slot. The `Slot` field in the `Prepare` message has a somewhat
