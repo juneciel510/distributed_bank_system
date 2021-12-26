@@ -1,7 +1,6 @@
 package main
 
 import (
-	//"lab3/failuredetector"
 	"net"
 	"time"
 
@@ -11,12 +10,6 @@ import (
 	"distributed_bank/golang-websocket-client/pkg/server"
 	"distributed_bank/leaderdetector"
 	multipaxos "distributed_bank/newpaxos"
-	// "github.com/juneciel510/test/lab3/failuredetector"
-	// "github.com/juneciel510/test/lab3/leaderdetector"
-	// "github.com/juneciel510/test/lab5/bank"
-	// multipaxos "github.com/juneciel510/test/lab5/newpaxos"
-	// "github.com/webdeveloppro/golang-websocket-client/pkg/client"
-	// "github.com/webdeveloppro/golang-websocket-client/pkg/server"
 )
 
 type State struct {
@@ -60,17 +53,12 @@ type NodesInfo struct {
 
 type TcpServer struct {
 	Con net.Listener
-	//rfail *failuredetector.EvtFailureDetector
-	// liscon map[int]net.Conn //store the connection in the list
 	SId   int
 	SAddr string
-	//addr *net.UDPAddr
+
 }
 
-// type Message struct {
-// 	Command   string
-// 	Parameter interface{}
-// }
+
 
 type ClientInfo struct {
 	ClientID   string
@@ -88,20 +76,13 @@ type DistNetworks struct {
 	dcVmap        map[int]multipaxos.DecidedValue //key is value.slotID
 	AccountMap    map[int]bank.Account            //map for storing account info
 	ResponseMap   map[int]multipaxos.Response
-	/*
-		Ld       *leaderdetector.MonLeaderDetector
-		Fd       *failuredetector.EvtFailureDetector
-		Proposer *multipaxos.Proposer
-		Acceptor *multipaxos.Acceptor
-		Learner  *multipaxos.Learner
-	*/
+
 	Ld       leaderdetector.MonLeaderDetector
 	Fd       failuredetector.EvtFailureDetector
 	Proposer multipaxos.Proposer
 	Acceptor multipaxos.Acceptor
 	Learner  multipaxos.Learner
 
-	//Mycon TcpServer
 
 	Hbout      chan failuredetector.Heartbeat
 	PrepareOut chan multipaxos.Prepare
@@ -112,20 +93,16 @@ type DistNetworks struct {
 
 	LdSubscribe <-chan int
 
-	//OlderServer []int
+
 	Quorum     int
 	TimeReconf int //the time of last configuration
 	CprmMap    map[int][]CPromise
 	DcStatMap  map[int]State
 
 	ReconfIn chan Reconf
-	//ReconfOut chan Reconf
-	//NewconfOut chan Newconf
 	NewconfIn  chan Newconf
 	CPromiseIn chan CPromise
-	//CPromiseOut chan CPromise
 	ActIn chan Activiate
-	//ActOut chan Activiate
 	CheckPoint map[int]multipaxos.DecidedValue //key is adu
 
 	ClientWSMap map[int]*client.WebSocketClient//to store the 

@@ -8,23 +8,15 @@ import (
 	"strconv"
 	"strings"
 
-	//"github.com/juneciel510/test/lab5/bank"
 	"distributed_bank/bank"
 )
 
-//todo:
 
-//add clientMap to the state
 
 func main() {
-	/*
-		addrlist[1] = "pitter1.ux.uis.no:12110"
-		addrlist[2] = "pitter3.ux.uis.no:12111"
-		addrlist[3] = "pitter16.ux.uis.no:12112"
-	*/
+
 	allNodeInfo := NodesInfo{
 		ServerIDlist: []int{1, 2, 3, 4, 5, 6, 7},
-		//ClientIDlist: []int{},
 		ServerAddrmap: map[int]string{
 			1: "127.0.0.1:12110",
 			2: "127.0.0.1:12111",
@@ -34,7 +26,6 @@ func main() {
 			6: "127.0.0.1:12115",
 			7: "127.0.0.1:12116",
 		},
-		//ClientAddrmap: map[string]string{},
 	}
 
 	//map for storing account number and balance
@@ -63,13 +54,11 @@ func main() {
 		fmt.Println("Error reading text:", err)
 	}
 	s := strings.Split(txt, ",")
-	//fmt.Println(s)
 	currentSerList := []int{}
 	for _, v := range s {
 		vInt, _ := strconv.Atoi(v)
 		currentSerList = append(currentSerList, vInt)
 	}
-	//fmt.Println("currentSerList", currentSerList)
 
 	deadsig := make(chan os.Signal, 1)
 
@@ -78,7 +67,6 @@ func main() {
 		log.Fatal("Server err: ", err)
 	}
 
-	//_, err = distNet.newTCPServer(ID, allNodeInfo)
 	go distNet.StartServerWS()
 	go distNet.startClientWS()
 	go distNet.handleChan()
