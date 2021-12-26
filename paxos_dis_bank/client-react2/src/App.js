@@ -1,5 +1,14 @@
 import React from "react";
 import styled from "styled-components";
+// import { Route, Switch as Switching } from "react-router";
+import {
+  BrowserRouter,
+  Routes as Switching,
+  Route,
+  Link,
+} from "react-router-dom";
+import Navbar from "./components/Navbar";
+import Service from "./pages/Service";
 //import "./App.css";
 
 var client = new WebSocket("ws://127.0.0.1:12110/ws");
@@ -14,7 +23,6 @@ class App extends React.Component {
       accountNum: 42,
       op: 0,
       amount: null,
-      //ws: new WebSocket("ws://127.0.0.1:12110/ws"),
       ws: null,
       message: [],
       servers: ["127.0.0.1:12110", "127.0.0.1:12111", "127.0.0.1:12112"],
@@ -82,14 +90,6 @@ class App extends React.Component {
       );
     }
 
-    // alert(
-    //   "Please check the transction you are going to submit.\nThe operation: " +
-    //     opString +
-    //     "\nAccount number: " +
-    //     this.state.accountNum +
-    //     "\nAmount: " +
-    //     this.state.amount
-    // );
     let opMessage = `Account number: ${this.state.accountNum}
       Operation:${opString}
       Amount:${this.state.amount}
@@ -177,16 +177,7 @@ class App extends React.Component {
 
   closeSocket = (event) => {
     console.log("You are disconnected");
-    //todo:reconnect
-    /*
-    this.newWS();
-    setTimeout(
-      function () {
-        console.log("this.state.ws.url", this.state.ws.url);
-        this.wsMount();
-      }.bind(this),
-      50
-    );*/
+    //reconnect
     //give up after a cetain times of attempts of re-connention
     if (this.state.index < 8) {
       setTimeout(() => {
@@ -229,64 +220,26 @@ class App extends React.Component {
       <p key={index}>{msg}</p>
     ));
     return (
-      <AppStyled>
-        <div className="App">
-          <h2>Welcome to Bank One</h2>
-          <form onSubmit={this.handleSubmit}>
-            <div className="row">
-              <label>
-                Choose your transction operation:
-                {/*controlled element: the value attribute is set on our form element, the displayed value 
-            will always be this.state.value, making the React state the source of truth.  */}
-                <select
-                  name="op" //name is same as the state name
-                  value={this.state.op}
-                  onChange={this.handleChange}
-                >
-                  <option value="0">Balance</option>
-                  <option value="1">Deposit</option>
-                  <option value="2">Withdrawal</option>
-                </select>
-              </label>
-              <br />
-            </div>
-            <div className="row">
-              <label>
-                Select the account number:
-                {/*controlled element: the value attribute is set on our form element, the displayed value 
-            will always be this.state.value, making the React state the source of truth.  */}
-                <select
-                  name="accountNum" //name is same as the state name
-                  value={this.state.accountNum}
-                  onChange={this.handleChange}
-                >
-                  <option value="42">42</option>
-                  <option value="52">52</option>
-                  <option value="62">62</option>
-                </select>
-              </label>
-              <br />
-            </div>
-            <div className="row">
-              <label>
-                Please input your amount:
-                <input
-                  className="amount"
-                  name="amount"
-                  type="number"
-                  value={this.state.amount}
-                  onChange={this.handleChange}
+      <div className="App">
+        <Navbar></Navbar>
+        <BrowserRouter>
+          <Switching>
+            <Route
+              path="service"
+              element={
+                <Service
+                  handleSubmit={this.handleSubmit}
+                  op={this.state.op}
+                  handleChange={this.handleChange}
+                  accountNum={this.state.accountNum}
+                  amount={this.state.amount}
+                  messages={messages}
                 />
-              </label>
-              <div className="row">
-                <input className="submit" type="submit" value="Submit" />
-                <br />
-              </div>
-            </div>
-          </form>
-          {messages}
-        </div>
-      </AppStyled>
+              }
+            />
+          </Switching>
+        </BrowserRouter>
+      </div>
     );
   }
 }
