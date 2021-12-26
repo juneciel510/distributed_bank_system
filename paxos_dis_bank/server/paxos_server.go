@@ -289,15 +289,16 @@ func (d *DistNetworks) handleMessage(msg server.Message) *server.Message {
 				id := multipaxos.SlotID(paramsSlots["ID"].(float64))
 				vrnd := multipaxos.Round(paramsSlots["Vrnd"].(float64))
 				paramsVal := paramsSlots["Vval"].(map[string]interface{})
-				cID := paramsVal["ClientID"].(string)
-				cSq := int(paramsVal["ClientSeq"].(float64))
-				noop := paramsVal["Noop"].(bool)
-				accNo := int(paramsVal["AccountNum"].(float64))
-				paramsTxn := paramsVal["Txn"].(map[string]interface{})
-				op := bank.Operation(paramsTxn["Op"].(float64))
-				amount := int(paramsTxn["Amount"].(float64))
-				txn := bank.Transaction{Op: op, Amount: amount}
-				vval := multipaxos.Value{ClientID: cID, ClientSeq: cSq, Noop: noop, AccountNum: accNo, Txn: txn}
+				// cID := paramsVal["ClientID"].(string)
+				// cSq := int(paramsVal["ClientSeq"].(float64))
+				// noop := paramsVal["Noop"].(bool)
+				// accNo := int(paramsVal["AccountNum"].(float64))
+				// paramsTxn := paramsVal["Txn"].(map[string]interface{})
+				// op := bank.Operation(paramsTxn["Op"].(float64))
+				// amount := int(paramsTxn["Amount"].(float64))
+				// txn := bank.Transaction{Op: op, Amount: amount}
+				// vval := multipaxos.Value{ClientID: cID, ClientSeq: cSq, Noop: noop, AccountNum: accNo, Txn: txn}
+				vval:=TransValue(paramsVal)
 				prmslot := multipaxos.PromiseSlot{ID: id, Vrnd: vrnd, Vval: vval}
 				slot = append(slot, prmslot)
 			}
@@ -321,15 +322,16 @@ func (d *DistNetworks) handleMessage(msg server.Message) *server.Message {
 		slot := multipaxos.SlotID(params["Slot"].(float64))
 		rnd := multipaxos.Round(params["Rnd"].(float64))
 		paramsVal := params["Val"].(map[string]interface{})
-		cID := paramsVal["ClientID"].(string)
-		cSq := int(paramsVal["ClientSeq"].(float64))
-		noop := paramsVal["Noop"].(bool)
-		accNo := int(paramsVal["AccountNum"].(float64))
-		paramsTxn := paramsVal["Txn"].(map[string]interface{})
-		op := bank.Operation(paramsTxn["Op"].(float64))
-		amount := int(paramsTxn["Amount"].(float64))
-		txn := bank.Transaction{Op: op, Amount: amount}
-		val := multipaxos.Value{ClientID: cID, ClientSeq: cSq, Noop: noop, AccountNum: accNo, Txn: txn}
+		// cID := paramsVal["ClientID"].(string)
+		// cSq := int(paramsVal["ClientSeq"].(float64))
+		// noop := paramsVal["Noop"].(bool)
+		// accNo := int(paramsVal["AccountNum"].(float64))
+		// paramsTxn := paramsVal["Txn"].(map[string]interface{})
+		// op := bank.Operation(paramsTxn["Op"].(float64))
+		// amount := int(paramsTxn["Amount"].(float64))
+		// txn := bank.Transaction{Op: op, Amount: amount}
+		// val := multipaxos.Value{ClientID: cID, ClientSeq: cSq, Noop: noop, AccountNum: accNo, Txn: txn}
+		val:=TransValue(paramsVal)
 		acc := multipaxos.Accept{From: from, Slot: slot, Rnd: rnd, Val: val}
 		d.Acceptor.DeliverAccept(acc)
 		break
@@ -339,15 +341,17 @@ func (d *DistNetworks) handleMessage(msg server.Message) *server.Message {
 		slot := multipaxos.SlotID(params["Slot"].(float64))
 		rnd := multipaxos.Round(params["Rnd"].(float64))
 		paramsVal := params["Val"].(map[string]interface{})
-		cID := paramsVal["ClientID"].(string)
-		cSq := int(paramsVal["ClientSeq"].(float64))
-		noop := paramsVal["Noop"].(bool)
-		accNo := int(paramsVal["AccountNum"].(float64))
-		paramsTxn := paramsVal["Txn"].(map[string]interface{})
-		op := bank.Operation(paramsTxn["Op"].(float64))
-		amount := int(paramsTxn["Amount"].(float64))
-		txn := bank.Transaction{Op: op, Amount: amount}
-		val := multipaxos.Value{ClientID: cID, ClientSeq: cSq, Noop: noop, AccountNum: accNo, Txn: txn}
+		// cID := paramsVal["ClientID"].(string)
+		// cSq := int(paramsVal["ClientSeq"].(float64))
+		// noop := paramsVal["Noop"].(bool)
+		// accNo := int(paramsVal["AccountNum"].(float64))
+		// paramsTxn := paramsVal["Txn"].(map[string]interface{})
+		// op := bank.Operation(paramsTxn["Op"].(float64))
+		// amount := int(paramsTxn["Amount"].(float64))
+		// txn := bank.Transaction{Op: op, Amount: amount}
+		// val := multipaxos.Value{ClientID: cID, ClientSeq: cSq, Noop: noop, AccountNum: accNo, Txn: txn}
+		val:=TransValue(paramsVal)
+		
 		ln := multipaxos.Learn{From: from, Slot: slot, Rnd: rnd, Val: val}
 		//log.Println(" LEARN translated ", ln)
 		d.Learner.DeliverLearn(ln)
@@ -437,15 +441,16 @@ func (d *DistNetworks) handleMessage(msg server.Message) *server.Message {
 			p := item.(map[string]interface{})
 			slotId := int(p["SlotID"].(float64))
 			paramsVal := p["Value"].(map[string]interface{})
-			cID := paramsVal["ClientID"].(string)
-			cSq := int(paramsVal["ClientSeq"].(float64))
-			noop := paramsVal["Noop"].(bool)
-			accNo := int(paramsVal["AccountNum"].(float64))
-			paramsTxn := paramsVal["Txn"].(map[string]interface{})
-			op := bank.Operation(paramsTxn["Op"].(float64))
-			amount := int(paramsTxn["Amount"].(float64))
-			txn := bank.Transaction{Op: op, Amount: amount}
-			val := multipaxos.Value{ClientID: cID, ClientSeq: cSq, Noop: noop, AccountNum: accNo, Txn: txn}
+			// cID := paramsVal["ClientID"].(string)
+			// cSq := int(paramsVal["ClientSeq"].(float64))
+			// noop := paramsVal["Noop"].(bool)
+			// accNo := int(paramsVal["AccountNum"].(float64))
+			// paramsTxn := paramsVal["Txn"].(map[string]interface{})
+			// op := bank.Operation(paramsTxn["Op"].(float64))
+			// amount := int(paramsTxn["Amount"].(float64))
+			// txn := bank.Transaction{Op: op, Amount: amount}
+			// val := multipaxos.Value{ClientID: cID, ClientSeq: cSq, Noop: noop, AccountNum: accNo, Txn: txn}
+			val:=TransValue(paramsVal)
 			dcVal := multipaxos.DecidedValue{
 				SlotID: multipaxos.SlotID(slotId),
 				Value:  val,
@@ -509,15 +514,16 @@ func (d *DistNetworks) handleMessage(msg server.Message) *server.Message {
 			p := item.(map[string]interface{})
 			slotId := int(p["SlotID"].(float64))
 			paramsVal := p["Value"].(map[string]interface{})
-			cID := paramsVal["ClientID"].(string)
-			cSq := int(paramsVal["ClientSeq"].(float64))
-			noop := paramsVal["Noop"].(bool)
-			accNo := int(paramsVal["AccountNum"].(float64))
-			paramsTxn := paramsVal["Txn"].(map[string]interface{})
-			op := bank.Operation(paramsTxn["Op"].(float64))
-			amount := int(paramsTxn["Amount"].(float64))
-			txn := bank.Transaction{Op: op, Amount: amount}
-			val := multipaxos.Value{ClientID: cID, ClientSeq: cSq, Noop: noop, AccountNum: accNo, Txn: txn}
+			// cID := paramsVal["ClientID"].(string)
+			// cSq := int(paramsVal["ClientSeq"].(float64))
+			// noop := paramsVal["Noop"].(bool)
+			// accNo := int(paramsVal["AccountNum"].(float64))
+			// paramsTxn := paramsVal["Txn"].(map[string]interface{})
+			// op := bank.Operation(paramsTxn["Op"].(float64))
+			// amount := int(paramsTxn["Amount"].(float64))
+			// txn := bank.Transaction{Op: op, Amount: amount}
+			// val := multipaxos.Value{ClientID: cID, ClientSeq: cSq, Noop: noop, AccountNum: accNo, Txn: txn}
+			val:=TransValue(paramsVal)
 			dcVal := multipaxos.DecidedValue{
 				SlotID: multipaxos.SlotID(slotId),
 				Value:  val,
@@ -855,4 +861,17 @@ func (d *DistNetworks) handleDecidedValue(dcV multipaxos.DecidedValue) {
 	if (d.dcVmap[d.Adu+1] != multipaxos.DecidedValue{}) {
 		d.handleDecidedValue(d.dcVmap[d.Adu+1])
 	}
+}
+
+func TransValue(paramsVal map[string]interface{}) multipaxos.Value {
+	cID := paramsVal["ClientID"].(string)
+	cSq := int(paramsVal["ClientSeq"].(float64))
+	noop := paramsVal["Noop"].(bool)
+	accNo := int(paramsVal["AccountNum"].(float64))
+	paramsTxn := paramsVal["Txn"].(map[string]interface{})
+	op := bank.Operation(paramsTxn["Op"].(float64))
+	amount := int(paramsTxn["Amount"].(float64))
+	txn := bank.Transaction{Op: op, Amount: amount}
+	val := multipaxos.Value{ClientID: cID, ClientSeq: cSq, Noop: noop, AccountNum: accNo, Txn: txn}
+	return val
 }
