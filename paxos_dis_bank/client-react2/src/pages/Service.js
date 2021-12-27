@@ -2,11 +2,6 @@ import React from "react";
 import styled from "styled-components";
 
 class Service extends React.Component {
-  //   constructor() {
-  //     super();
-  //     //initialize the clientID, clientSeq and accountNum
-  //   }
-
   render() {
     return (
       <div className="Service">
@@ -68,17 +63,4 @@ class Service extends React.Component {
   }
 }
 
-const AppStyled = styled.div`
-  position: absolute;
-  left: 35%;
-  .row {
-    margin-top: 5px;
-    select {
-      margin-left: 5px;
-    }
-    .amount {
-      margin-left: 5px;
-    }
-  }
-`;
 export default Service;

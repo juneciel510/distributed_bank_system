@@ -9,6 +9,7 @@ import {
 } from "react-router-dom";
 import Navbar from "./components/Navbar";
 import Service from "./pages/Service";
+import Reconfiguration from "./pages/Reconfiguration";
 //import "./App.css";
 
 var client = new WebSocket("ws://127.0.0.1:12110/ws");
@@ -25,13 +26,25 @@ class App extends React.Component {
       amount: null,
       ws: null,
       message: [],
-      servers: ["127.0.0.1:12110", "127.0.0.1:12111", "127.0.0.1:12112"],
+      servers: [
+        "127.0.0.1:12110",
+        "127.0.0.1:12111",
+        "127.0.0.1:12112",
+        "127.0.0.1:12113",
+        "127.0.0.1:12114",
+        "127.0.0.1:12115",
+        "127.0.0.1:12116",
+      ],
       index: 0,
       length: null,
+      serverIDs: [1, 2, 3, 4, 5, 6, 7],
+      checkedState: [false, false, false, false, false, false, false],
     };
     this.handleChange = this.handleChange.bind(this);
     this.handleSubmit = this.handleSubmit.bind(this);
     //this.opNumberToString = this.opNumberToString.bind(this);
+    this.handleChange_CB = this.handleChange_CB.bind(this);
+    this.handleSubmit_CB = this.handleSubmit_CB.bind(this);
     this.state.length = this.state.servers.length;
   }
   opNumberToString(op) {
@@ -68,6 +81,15 @@ class App extends React.Component {
     this.setState({ [event.target.name]: event.target.value }); //handle multiple event.target.value, store in an array
 
     console.log(this.state[event.target.name]);
+  }
+
+  handleChange_CB(event) {
+    const updatedCheckedState = this.state.checkedState.map((item, index) =>
+      index === Number(event.target.name) ? !item : item
+    );
+    this.setState({
+      checkedState: updatedCheckedState,
+    });
   }
 
   handleSubmit(event) {
@@ -123,6 +145,25 @@ class App extends React.Component {
     this.state.ws.send(JSON.stringify(msg));
     this.setState({ clientSeq: this.state.clientSeq + 1 });
     console.log("this.state.clientSeq", this.state.clientSeq);
+    event.preventDefault();
+  }
+
+  handleSubmit_CB(event) {
+    console.log("this.state.checkedState", this.state.checkedState);
+    const serverChosen = [];
+    this.state.checkedState.map((item, index) =>
+      item === true ? serverChosen.push(this.state.serverIDs[index]) : null
+    );
+    console.log("serverChosen", serverChosen);
+    let msg = {
+      Command: "RECONFIG",
+      Parameter: {
+        Timestamp: new Date().getTime(),
+        NewerServStr: serverChosen.join(),
+      },
+    };
+    console.log("msg", msg);
+    this.state.ws.send(JSON.stringify(msg));
     event.preventDefault();
   }
 
@@ -234,6 +275,17 @@ class App extends React.Component {
                   accountNum={this.state.accountNum}
                   amount={this.state.amount}
                   messages={messages}
+                />
+              }
+            />
+            <Route
+              path="reconfiguration"
+              element={
+                <Reconfiguration
+                  handleSubmit_CB={this.handleSubmit_CB}
+                  handleChange_CB={this.handleChange_CB}
+                  serverIDs={this.state.serverIDs}
+                  checkedState={this.state.checkedState}
                 />
               }
             />
