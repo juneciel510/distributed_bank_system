@@ -2,7 +2,6 @@ package multipaxos
 
 import (
 	"container/list"
-	//"dat520/lab3/leaderdetector"
 	"distributed_bank/leaderdetector"
 	"sort"
 	"time"
@@ -89,14 +88,10 @@ func NewProposer(id, nrOfNodes, adu int, ld leaderdetector.LeaderDetector, prepa
 // Start starts p's main run loop as a separate goroutine.
 func (p *Proposer) Start() {
 	trustMsgs := p.ld.Subscribe()
-	//fmt.Println("---------Proposer Start():trustMsgs,p.leader", trustMsgs, p.leader)
 	go func() {
 		for {
-			//fmt.Println("---------Proposer Start():trustMsgs,p.leader", trustMsgs, p.leader)
 			select {
 			case prm := <-p.promiseIn:
-				//fmt.Println("prm := <-p.promiseIn", prm)
-				//fmt.Println("---------Proposer Start(),p.leader", trustMsgs, p.leader)
 				accepts, output := p.handlePromise(prm)
 				if !output {
 					continue
@@ -109,7 +104,6 @@ func (p *Proposer) Start() {
 				}
 				p.sendAccept()
 			case cval := <-p.cvalIn:
-				//fmt.Println("cval := <-p.cvalIn,cval,p.id, p.leader", cval, p.id, p.leader)
 				if p.id != p.leader {
 					continue
 				}
@@ -119,7 +113,6 @@ func (p *Proposer) Start() {
 				}
 				p.sendAccept()
 			case <-p.incDcd:
-				//fmt.Println("<-p.incDcd", p.adu)
 				p.adu++
 				if p.id != p.leader {
 					continue
@@ -129,12 +122,10 @@ func (p *Proposer) Start() {
 				}
 				p.sendAccept()
 			case <-p.phaseOneProgressTicker.C:
-				//fmt.Println("<-p.phaseOneProgressTicker.C,p.id == p.leader", p.id, p.leader)
 				if p.id == p.leader && !p.phaseOneDone {
 					p.startPhaseOne()
 				}
 			case leader := <-trustMsgs:
-				//fmt.Println("---------Proposer Start() newleader voted", leader)
 				p.leader = leader
 				if leader == p.id {
 					p.startPhaseOne()
@@ -172,15 +163,8 @@ func (p *Proposer) IncrementAllDecidedUpTo() {
 // accept messages. If handlePromise returns false as output, then accs will be
 // a nil slice.
 func (p *Proposer) handlePromise(prm Promise) (accs []Accept, output bool) {
-	// TODO(student)
-
-	//fmt.Println("*************handlePromise:prm,prm.Rnd,p.crnd:", prm, prm.Rnd, p.crnd)
 	if prm.Rnd == p.crnd {
 		for k, v := range p.promises {
-			//if v == nil {
-			//	p.promises[k] = &prm
-			//	break
-			//}
 			if v != nil {
 				if v.From == prm.From {
 					break
@@ -230,7 +214,6 @@ func (p *Proposer) handlePromise(prm Promise) (accs []Accept, output bool) {
 			for k := range accMap {
 				keys = append(keys, int(k))
 			}
-			//sort.Ints(keys)
 			sort.Ints(keys[:])
 			if len(keys) > 0 {
 				for j := keys[0]; j <= keys[len(keys)-1]; j++ {
@@ -247,12 +230,6 @@ func (p *Proposer) handlePromise(prm Promise) (accs []Accept, output bool) {
 				accs = []Accept{}
 				output = true
 			}
-
-			//map index=slot ID, value:=biggest Vrnd & correspoding Vrnd
-			//if
-			//No promise with a value, return nil and false
-			//else
-			//pick the Vrnd in the map corresponding to the slot ID
 
 		} else {
 			accs = nil
@@ -280,7 +257,6 @@ func (p *Proposer) startPhaseOne() {
 	p.promises = make([]*Promise, p.n)
 	p.increaseCrnd()
 	p.prepareOut <- Prepare{From: p.id, Slot: p.adu, Crnd: p.crnd}
-	//fmt.Println("----------------------startPhaseOne(),Prepare{From: p.id, Slot: p.adu, Crnd: p.crnd}", Prepare{From: p.id, Slot: p.adu, Crnd: p.crnd})
 }
 
 // Internal: sendAccept sends an accept from either the accept out queue
@@ -293,7 +269,7 @@ func (p *Proposer) sendAccept() {
 		// We must wait for the next slot to be decided before we can
 		// send an accept.
 		//
-		// For Lab 6: Alpha has a value of one here. If you later
+		// For Lab 6: Alpha has a value of one here.  later
 		// implement pipelining then alpha should be extracted to a
 		// proposer variable (alpha) and this function should have an
 		// outer for loop.

@@ -115,7 +115,7 @@ func (d *DistNetworks) start() {
 	d.Proposer.Start()
 	d.Acceptor.Start()
 	d.Learner.Start()
-	log.Println("************the Fd&paxos have been started")
+	log.Println("***start()*********the Fd&paxos have been started")
 }
 
 func  (d *DistNetworks)StartServerWS(){

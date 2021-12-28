@@ -45,8 +45,6 @@ func NewEvtFailureDetector(id int, nodeIDs []int, sr SuspectRestorer, delta time
 	suspected := make(map[int]bool)
 	alive := make(map[int]bool)
 
-	// TODO(student): perform any initialization necessary
-	//??
 	timeoutSignal := time.NewTicker(delta)
 	//set the defult value of alive to be true and suspected to be faluse
 	for _, v := range nodeIDs {
@@ -85,16 +83,11 @@ func (e *EvtFailureDetector) Start() {
 			e.testingHook() // DO NOT REMOVE THIS LINE. A no-op when not testing.
 			select {
 			case hb := <-e.hbIn:
-				//fmt.Println("the incoming heartbeat is:", hb)
 				if hb.Request {
-					// do something
-					//fmt.Println("the outcoming heartbeat is:", Heartbeat{To: hb.From, From: e.id, Request: false})
 					e.hbSend <- Heartbeat{To: hb.From, From: e.id, Request: false}
 				} else {
-					// do otherthing
 					e.alive[hb.From] = true
 				}
-				//fmt.Println("the hbsend length in fd.go is:", len(e.hbSend))
 			case <-e.timeoutSignal.C:
 				e.timeout()
 			case <-e.stop:
@@ -107,7 +100,6 @@ func (e *EvtFailureDetector) Start() {
 // DeliverHeartbeat delivers heartbeat hb to failure detector e.
 func (e *EvtFailureDetector) DeliverHeartbeat(hb Heartbeat) {
 	e.hbIn <- hb
-	//fmt.Println("heartbeat delivered to hbIn")
 }
 
 // Stop stops e's main run loop.
@@ -117,7 +109,6 @@ func (e *EvtFailureDetector) Stop() {
 
 // Internal: timeout runs e's timeout procedure.
 func (e *EvtFailureDetector) timeout() {
-	// TODO(student): Implement timeout procedure
 	//if the alive intersect with the suspected, then
 	flag := 0
 
@@ -142,7 +133,7 @@ func (e *EvtFailureDetector) timeout() {
 	e.timeoutSignal = time.NewTicker(e.delay)
 }
 
-// TODO(student): Add other unexported functions or methods if needed.
+// Add other unexported functions or methods if needed.
 func (e *EvtFailureDetector) Reconfig(sIDL []int) {
 	e.nodeIDs = sIDL
 	suspected := make(map[int]bool)

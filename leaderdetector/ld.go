@@ -4,8 +4,7 @@ package leaderdetector
 // described at page 53 in:
 // Christian Cachin, Rachid Guerraoui, and Luís Rodrigues: "Introduction to
 // Reliable and Secure Distributed Programming" Springer, 2nd edition, 2011.
-type MonLeaderDetector struct { // TODO(student): Add needed fields
-
+type MonLeaderDetector struct { 
 	nodeIDs []int
 	susp    map[int]bool
 	leader  int
@@ -15,7 +14,6 @@ type MonLeaderDetector struct { // TODO(student): Add needed fields
 // NewMonLeaderDetector returns a new Monarchical Eventual Leader Detector
 // given a list of node ids.
 func NewMonLeaderDetector(nodeIDs []int) *MonLeaderDetector {
-	// TODO(student): Add needed implementation
 	m := &MonLeaderDetector{}
 	m.nodeIDs = nodeIDs
 	m.leader = UnknownID
@@ -30,7 +28,6 @@ func NewMonLeaderDetector(nodeIDs []int) *MonLeaderDetector {
 // Leader returns the current leader. Leader will return UnknownID if all nodes
 // are suspected.
 func (m *MonLeaderDetector) Leader() int {
-	// TODO(student): Implement
 	var lead int = m.leader
 	lead = m.max(m.nodeIDs)
 	if lead != m.leader {
@@ -47,7 +44,6 @@ func (m *MonLeaderDetector) Leader() int {
 // id as suspected. If the suspect indication result in a leader change
 // the leader detector should publish this change to its subscribers.
 func (m *MonLeaderDetector) Suspect(id int) {
-	// TODO(student): Implement
 	m.susp[id] = true
 	m.leader = m.Leader()
 }
@@ -56,7 +52,6 @@ func (m *MonLeaderDetector) Suspect(id int) {
 // id as restored. If the restore indication result in a leader change
 // the leader detector should publish this change to its subscribers.
 func (m *MonLeaderDetector) Restore(id int) {
-	// TODO(student): Implement
 	m.susp[id] = false
 	m.leader = m.Leader()
 
@@ -69,13 +64,11 @@ func (m *MonLeaderDetector) Restore(id int) {
 // Note: Subscribe returns a unique channel to every subscriber;
 // it is not meant to be shared.
 func (m *MonLeaderDetector) Subscribe() <-chan int {
-	// TODO(student): Implement
 	ch := make(chan int, len(m.nodeIDs))
 	m.subs = append(m.subs, ch)
 	return ch
 }
 
-// TODO(student): Add other unexported functions or methods if needed.
 
 func (m *MonLeaderDetector) max(nodeid []int) int {
 	var l int = UnknownID
