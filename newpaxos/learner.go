@@ -1,11 +1,9 @@
 package multipaxos
 
 // Learner represents a learner as defined by the Multi-Paxos algorithm.
-type Learner struct { // TODO(student): algorithm and distributed implementation
-	// Add needed fields
+type Learner struct { 
 
 	id int // id: The id of the node running this instance of a Paxos acceptor.
-	//rnd Round //highest round seen
 	quorum int
 	n      int
 
@@ -29,11 +27,8 @@ type Learner struct { // TODO(student): algorithm and distributed implementation
 // decidedOut: A send only channel used to send values that has been learned,
 // i.e. decided by the Paxos nodes.
 func NewLearner(id int, nrOfNodes int, decidedOut chan<- DecidedValue) *Learner {
-	// TODO(student): algorithm and distributed implementation
-
 	return &Learner{
 		id: id,
-		//rnd: NoRound,
 		quorum:     (nrOfNodes / 2) + 1,
 		n:          nrOfNodes,
 		slotLearn:  make(map[SlotID][]*Learn),
@@ -51,7 +46,6 @@ func NewLearner(id int, nrOfNodes int, decidedOut chan<- DecidedValue) *Learner 
 func (l *Learner) Start() {
 	go func() {
 		for {
-			// TODO(student): distributed implementation
 			select {
 			case lrn := <-l.learnIn:
 				val, sid, output := l.handleLearn(lrn)
@@ -68,13 +62,11 @@ func (l *Learner) Start() {
 
 // Stop stops l's main run loop.
 func (l *Learner) Stop() {
-	// TODO(student): distributed implementation
 	l.stop <- struct{}{}
 }
 
 // DeliverLearn delivers learn lrn to learner l.
 func (l *Learner) DeliverLearn(lrn Learn) {
-	// TODO(student): distributed implementation
 	l.learnIn <- lrn
 }
 
@@ -84,8 +76,6 @@ func (l *Learner) DeliverLearn(lrn Learn) {
 // slot that was decided and val contain the decided value. If handleLearn
 // returns false as output, then val and sid will have their zero value.
 func (l *Learner) handleLearn(learn Learn) (val Value, sid SlotID, output bool) {
-	// TODO(student): algorithm implementation
-
 	if l.slotLearn[learn.Slot] == nil {
 		l.slotLearn[learn.Slot] = append(l.slotLearn[learn.Slot], &learn)
 	} else {
@@ -125,7 +115,6 @@ func (l *Learner) handleLearn(learn Learn) (val Value, sid SlotID, output bool) 
 
 }
 
-// TODO(student): Add any other unexported methods needed.
 //exported method reconfig
 func (l *Learner) Reconfig(nrOfNodes int) {
 	l.quorum = (nrOfNodes / 2) + 1

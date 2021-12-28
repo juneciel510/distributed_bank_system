@@ -1,6 +1,5 @@
 import React from "react";
 import styled from "styled-components";
-// import { Route, Switch as Switching } from "react-router";
 import {
   BrowserRouter,
   Routes as Switching,
@@ -42,7 +41,7 @@ class App extends React.Component {
     };
     this.handleChange = this.handleChange.bind(this);
     this.handleSubmit = this.handleSubmit.bind(this);
-    //this.opNumberToString = this.opNumberToString.bind(this);
+    //for reconfiguration
     this.handleChange_CB = this.handleChange_CB.bind(this);
     this.handleSubmit_CB = this.handleSubmit_CB.bind(this);
     this.state.length = this.state.servers.length;
@@ -116,7 +115,6 @@ class App extends React.Component {
       Operation:${opString}
       Amount:${this.state.amount}
     `;
-    //resSting = "Account number:" + accountNum + "\nBalance:" + balance;
 
     opMessage = this.createOpMessage(this.state.op);
     console.log(opMessage);
@@ -186,11 +184,6 @@ class App extends React.Component {
 
     switch (messageData["Command"]) {
       case "LEADER":
-        // console.log(messageData["Parameter"]);
-        // console.log(
-        //   "typeof(messageData[Parameter])",
-        //   typeof messageData["Parameter"]
-        // );
         client = new WebSocket("ws://" + messageData["Parameter"] + "/ws");
         this.setState({
           ws: new WebSocket("ws://" + messageData["Parameter"] + "/ws"),
@@ -205,7 +198,6 @@ class App extends React.Component {
         let resString = `Account number: ${accountNum}
         Balance:${balance}
         `;
-        //resSting = "Account number:" + accountNum + "\nBalance:" + balance;
         console.log(resString);
         message = this.state.message.concat(resString);
         this.setState({ message: message });
@@ -213,7 +205,6 @@ class App extends React.Component {
       default:
       //console.log(messageData);
     }
-    //todo:message dispatching
   };
 
   closeSocket = (event) => {
@@ -238,11 +229,6 @@ class App extends React.Component {
 
   wsMount() {
     console.log("wsMount()");
-    /*
-    this.state.ws.addEventListener("open", this.openEventListener);
-    this.state.ws.addEventListener("message", this.incomingMessageListener);
-    this.state.ws.addEventListener("close", this.closeSocket);
-    */
     client.addEventListener("open", this.openEventListener);
     client.addEventListener("message", this.incomingMessageListener);
     client.addEventListener("close", this.closeSocket);
@@ -250,9 +236,6 @@ class App extends React.Component {
 
   componentDidMount() {
     console.log("componentDidMount()");
-    //this.newWS();
-    //console.log("client.readyState", this.state.ws.readyState);
-    //console.log("client:", this.state.ws);
     this.wsMount();
   }
 

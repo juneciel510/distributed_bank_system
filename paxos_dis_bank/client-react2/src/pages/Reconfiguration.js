@@ -6,12 +6,14 @@ class Reconfiguration extends React.Component {
     return (
       <div className="Reconfig">
         <form name="reconfig" onSubmit={this.props.handleSubmit_CB}>
+          Choose the servers you want to reconfig:
           <ul className="server-list">
             {this.props.serverIDs.map((server, index) => {
               return (
                 <li key={index}>
                   <div className="server-list-item">
                     <input
+                      className="checkbox"
                       type="checkbox"
                       id={`custom-checkbox-${index}`}
                       name={index}

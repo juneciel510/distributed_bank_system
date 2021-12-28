@@ -22,8 +22,9 @@ const Navbar = () => {
     <nav>
       <div className="nav-center">
         <div className="nav-header">
-          {/* <img src={logo} className="logo" alt="logo" /> */}
-          Bank One
+          <div className="bank-name">
+            Bank<span className="bank-name-span">One</span>{" "}
+          </div>
           <button className="nav-toggle" onClick={toggleLinks}>
             <FaBars />
           </button>
@@ -40,16 +41,6 @@ const Navbar = () => {
             })}
           </ul>
         </div>
-        {/* <ul className="social-icons">
-          {social.map((socialIcon) => {
-            const { id, url, icon } = socialIcon;
-            return (
-              <li key={id}>
-                <a href={url}>{icon}</a>
-              </li>
-            );
-          })}
-        </ul> */}
       </div>
     </nav>
   );

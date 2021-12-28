@@ -9,9 +9,8 @@ class Service extends React.Component {
           <div className="row">
             <label>
               Choose your transction operation:
-              {/*controlled element: the value attribute is set on our form element, the displayed value 
-            will always be this.state.value, making the React state the source of truth.  */}
               <select
+                className="select"
                 name="op" //name is same as the state name
                 value={this.props.op}
                 onChange={this.props.handleChange}
@@ -26,9 +25,8 @@ class Service extends React.Component {
           <div className="row">
             <label>
               Select the account number:
-              {/*controlled element: the value attribute is set on our form element, the displayed value 
-            will always be this.state.value, making the React state the source of truth.  */}
               <select
+                className="select"
                 name="accountNum" //name is same as the state name
                 value={this.props.accountNum}
                 onChange={this.props.handleChange}
