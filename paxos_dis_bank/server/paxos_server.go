@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"distributed_bank/bank"
@@ -63,6 +64,9 @@ func NewDistNetwork(sID int, currentSerList []int, allNodeInfo NodesInfo, aInfo 
 	msgIn:=make(chan server.Message) 
 	hub := server.NewHub(broadcast,msgIn)
 
+	syncCWSM:=SyncClientWSMap{ClientWSMap:make(map[int]*client.WebSocketClient),
+		ClientWSMapMutex: sync.RWMutex{}}
+
 	return &DistNetworks{
 		SID: sID,
 		Adu:           adu,
@@ -102,7 +106,8 @@ func NewDistNetwork(sID int, currentSerList []int, allNodeInfo NodesInfo, aInfo 
 		ActIn: make(chan Activiate, 8),
 	
 		CheckPoint: make(map[int]multipaxos.DecidedValue),
-		ClientWSMap: make(map[int]*client.WebSocketClient),
+		// ClientWSMap: make(map[int]*client.WebSocketClient),
+		SyncCWSM:syncCWSM,
 		Broadcast: broadcast,
 		MsgIn:msgIn,
 		Hub:hub,
@@ -157,29 +162,41 @@ func (d *DistNetworks) startClientWS(){
 			if err != nil {
 				panic(err)
 			}
-			d.ClientWSMap[v]=clientws
+			// d.ClientWSMap[v]=clientws
+			d.writeSyncClientWSMap(v,clientws)
 		}
 
 	}	
-	log.Println("Connecting")
+	log.Println("Connected to current servers:",d.SyncCWSM.ClientWSMap)
 }
 
 //send messages to a single serverWS specified
 func (d *DistNetworks) sendMsgToServerWS(msg server.Message, sID int ){
+	
+	log.Println("-------------sendMsgToServerWS---sID,d.SyncCWSM.ClientWSMap-----",sID,d.SyncCWSM.ClientWSMap,msg)
 	//if no connection with the specified server, dial the server
-	if _, ok := d.ClientWSMap[sID]; !ok {
+	clientws:=d.readSyncClientWSMap(sID)
+	if  clientws==nil {
 		addr := d.AllNodeInfo.ServerAddrmap[sID]
 		clientws, err := client.NewWebSocketClient(addr, "ws")
 		if err != nil {
+			print("error in sendMsgToServerWS()" )
 			panic(err)
 		}
-		d.ClientWSMap[sID]=clientws
+		// d.ClientWSMap[sID]=clientws
+		d.writeSyncClientWSMap(sID,clientws)
 	}
-		
-	err:=d.ClientWSMap[sID].Write(msg)
+
+	log.Println("sID,d.SyncCWSM.ClientWSMap----",sID,d.SyncCWSM.ClientWSMap)
+	clientws=d.readSyncClientWSMap(sID)
+	log.Println("-------clientws--",clientws)
+	if clientws==nil {
+		panic("----clientws is nil")
+	}
+	err:=clientws.Write(msg)
 	if err != nil {
 		log.Println("error in sendMsgToServerWS",err)
-		//panic(err)
+		panic(err)
 	}
 	
 
@@ -190,7 +207,8 @@ func (d *DistNetworks) broadcastToServerWS(msg server.Message){
 	
 			for _, v := range d.CurrentServ {
 				if v != d.SID {
-					d.ClientWSMap[v].Write(msg)
+					// d.ClientWSMap[v].Write(msg)
+					d.sendMsgToServerWS(msg,v)
 				}
 			}
 		
@@ -210,6 +228,7 @@ func (d *DistNetworks) broadcastToReactClient(msg server.Message){
 
 //deplexing the incoming data from the network
 func (d *DistNetworks) handleMessage(msg server.Message) *server.Message {
+	log.Println("----------handleMessage------msg received",msg)
 	switch msg.Command {
 
 	case "CLIENT":
@@ -225,6 +244,7 @@ func (d *DistNetworks) handleMessage(msg server.Message) *server.Message {
 		break
 
 	case "HEARTBEAT":
+		// log.Println("heartbeat received:",msg)
 		params := msg.Parameter.(map[string]interface{})
 		from := int(params["From"].(float64))
 		to := int(params["To"].(float64))
@@ -597,9 +617,14 @@ func (d *DistNetworks) handleChan(){
 				To:   newconf.From,
 				Stat: stat,
 			}
-			msg := server.Message{Command: "CPROMISE", Parameter: cPrm}
-			sID:=cPrm.To
-			go d.sendMsgToServerWS(msg , sID)
+			
+			if cPrm.To==d.SID {
+				d.CPromiseIn <- cPrm
+			}else{
+				msg := server.Message{Command: "CPROMISE", Parameter: cPrm}
+				go d.sendMsgToServerWS(msg , cPrm.To)
+			}
+			
 
 		case cPrm := <-d.CPromiseIn:
 			d.handleCPrmIn(cPrm)
@@ -638,6 +663,9 @@ func (d *DistNetworks) handleChan(){
 
 					//start paxos and Ld
 					d.start()
+					// d.StartServerWS()
+					// d.startClientWS()
+
 			
 				} else {
 					stat := State{
@@ -699,9 +727,15 @@ func (d *DistNetworks) handleCPrmIn(cPrm CPromise) {
 					}
 					msg := server.Message{Command: "ACTIVIATE", Parameter: actv}
 					newerSer := actv.Stat.NewerServer
-					log.Println("-------gonging to send msg ACTIVIATE", actv.Stat.Timestamp)
+					log.Println("-------going to send msg ACTIVIATE", actv.Stat.Timestamp)
 					for _, v := range newerSer {
-						go d.sendMsgToServerWS(msg, v)
+						if v==d.SID {
+							d.ActIn<-actv
+						}else{
+							log.Println("activiate sid:",v)
+							go d.sendMsgToServerWS(msg, v)
+						}
+						
 					}
 				}
 			}
@@ -780,4 +814,21 @@ func TransValue(paramsVal map[string]interface{}) multipaxos.Value {
 	txn := bank.Transaction{Op: op, Amount: amount}
 	val := multipaxos.Value{ClientID: cID, ClientSeq: cSq, Noop: noop, AccountNum: accNo, Txn: txn}
 	return val
+}
+
+func (d *DistNetworks)writeSyncClientWSMap(sID int,clientws *client.WebSocketClient){
+	d.SyncCWSM.ClientWSMapMutex.Lock()
+    d.SyncCWSM.ClientWSMap[sID]=clientws
+    d.SyncCWSM.ClientWSMapMutex.Unlock()
+}
+
+func (d *DistNetworks)readSyncClientWSMap(sID int) (*client.WebSocketClient){
+	d.SyncCWSM.ClientWSMapMutex.RLock()
+	clientws, ok := d.SyncCWSM.ClientWSMap[sID]
+	d.SyncCWSM.ClientWSMapMutex.RUnlock()
+	if !ok {
+		fmt.Println("key missing",sID)
+		return nil
+	}
+	return clientws
 }
