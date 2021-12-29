@@ -2,6 +2,7 @@ package main
 
 import (
 	"net"
+	"sync"
 	"time"
 
 	"distributed_bank/bank"
@@ -65,6 +66,10 @@ type ClientInfo struct {
 	ClientAddr string
 }
 
+type SyncClientWSMap struct {
+	ClientWSMap map[int]*client.WebSocketClient//store the websocket of all other servers
+	ClientWSMapMutex sync.RWMutex
+}
 type DistNetworks struct {
 	SID int
 	Adu           int
@@ -105,7 +110,8 @@ type DistNetworks struct {
 	ActIn chan Activiate
 	CheckPoint map[int]multipaxos.DecidedValue //key is adu
 
-	ClientWSMap map[int]*client.WebSocketClient//to store the 
+	// ClientWSMap map[int]*client.WebSocketClient//store the websocket of all other servers
+	SyncCWSM SyncClientWSMap
 	Hub *server.Hub
 	Broadcast chan server.Message
 	MsgIn chan server.Message

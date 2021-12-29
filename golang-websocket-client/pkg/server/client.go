@@ -72,12 +72,13 @@ func (c *Client) readPump() {
 			 	c.hub.log("readPump", err, "reading error")
 			 }
 			log.Println("error in readPump",err)
+			// panic(err)
 		
 			break
 		}
 
 		if message.Command!="HEARTBEAT"{
-			fmt.Println("************************in readPump(),message: ",message)
+			log.Println("************************in readPump(),message: ",message)
 		}
 		if message.Command=="CLIENT"{
 			params := message.Parameter.(map[string]interface{})
