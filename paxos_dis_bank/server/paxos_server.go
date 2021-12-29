@@ -175,8 +175,8 @@ func (d *DistNetworks) sendMsgToServerWS(msg server.Message, sID int ){
 	
 	log.Println("-------------sendMsgToServerWS---sID,d.SyncCWSM.ClientWSMap-----",sID,d.SyncCWSM.ClientWSMap,msg)
 	//if no connection with the specified server, dial the server
-	clientws,ok:=d.readSyncClientWSMap(sID)
-	if  !ok {
+	clientws:=d.readSyncClientWSMap(sID)
+	if  clientws==nil {
 		addr := d.AllNodeInfo.ServerAddrmap[sID]
 		clientws, err := client.NewWebSocketClient(addr, "ws")
 		if err != nil {
@@ -188,7 +188,7 @@ func (d *DistNetworks) sendMsgToServerWS(msg server.Message, sID int ){
 	}
 
 	log.Println("sID,d.SyncCWSM.ClientWSMap----",sID,d.SyncCWSM.ClientWSMap)
-	clientws,_=d.readSyncClientWSMap(sID)
+	clientws=d.readSyncClientWSMap(sID)
 	log.Println("-------clientws--",clientws)
 	if clientws==nil {
 		panic("----clientws is nil")
@@ -822,13 +822,13 @@ func (d *DistNetworks)writeSyncClientWSMap(sID int,clientws *client.WebSocketCli
     d.SyncCWSM.ClientWSMapMutex.Unlock()
 }
 
-func (d *DistNetworks)readSyncClientWSMap(sID int) (*client.WebSocketClient, bool){
+func (d *DistNetworks)readSyncClientWSMap(sID int) (*client.WebSocketClient){
 	d.SyncCWSM.ClientWSMapMutex.RLock()
 	clientws, ok := d.SyncCWSM.ClientWSMap[sID]
 	d.SyncCWSM.ClientWSMapMutex.RUnlock()
 	if !ok {
 		fmt.Println("key missing",sID)
-		return nil,ok
+		return nil
 	}
-	return clientws,ok
+	return clientws
 }
