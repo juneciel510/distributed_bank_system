@@ -1,22 +1,43 @@
 # Distributed bank system
 
-## Table of Contents
+## Paxos model
+
+Implement multi-paxos algorithm to achieve consensus on a sequence of values. All the servers will be synchronized to the same state by this scheme.
+
+The multi-paxos model consists of Proposer, Acceptor & Leaner.
+
+## Paxos Server
+
+A server module is needed to coordinate the different parts of the node, which is comprised of three main parts.
+
+- Failure detector, Leader detector
+- Paxos model
+- Network handling
+
+## Bank Javascript Client
+
+Implement a client application with a graphical user interface for the bank service.
+
+- The client application have a web user interface and use a framework.
+- Clients and replicas (the bank service) communicate using Websockets.
+
+## Bank with Reconfiguration
+
+Implement a resilient bank application that stores a set of bank accounts and apply transactions to them as they are decided by Multi-Paxos nodes. The implementation consists of two parts:
+
+1. Replicate a set of bank accounts.
+
+2. Dynamic Membership through Reconfiguration
+   Implement a reconfiguration command to adjust the set of servers that are executing in the system, e.g., adding or replacing nodes while the system is running.
+   Therefore, a configuration consists of a set of servers that are executing the Paxos protocol.
+
+<!-- ## Table of Contents
 
 - [Distributed bank system](#distributed-bank-system)
-  - [Table of Contents](#table-of-contents)
-  - [Multi-Paxos](#multi-paxos)
-    - [Background and Resources](#background-and-resources)
-    - [Algorithm implementation](#algorithm-implementation)
-      - [Specification](#specification)
-      - [Multi-Paxos Package](#multi-paxos-package)
-      - [Distributed Multi-Paxos Application](#distributed-multi-paxos-application)
-      - [Paxos Server](#paxos-server)
-    - [Appendix - Proposer Test Cases](#appendix---proposer-test-cases)
-  - [Bank with Reconfiguration](#bank-with-reconfiguration)
-    - [Introduction](#introduction)
-    - [Reconfiguration scheme](#reconfiguration-scheme)
+  - [Paxos model](#paxos-model)
+  - [Paxos Server](#paxos-server)
   - [Bank Javascript Client](#bank-javascript-client)
-  - [References](#references)
+  - [Bank with Reconfiguration](#bank-with-reconfiguration)
 
 ## Multi-Paxos
 
@@ -240,4 +261,4 @@ Implement a client application with a graphical user interface for the bank serv
 2. Jacob R. Lorch, Atul Adya, William J. Bolosky, Ronnie Chaiken, John R.
    Douceur, and Jon Howell. _The smart way to migrate replicated stateful
    services._ In Proceedings of the 1st ACM SIGOPS/EuroSys European Conference
-   on Computer Systems 2006, EuroSys ’06, pages 103–115, New York, NY, USA, 2006. ACM.
+   on Computer Systems 2006, EuroSys ’06, pages 103–115, New York, NY, USA, 2006. ACM. -->

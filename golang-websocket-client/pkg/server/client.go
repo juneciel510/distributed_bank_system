@@ -72,8 +72,6 @@ func (c *Client) readPump() {
 			 	c.hub.log("readPump", err, "reading error")
 			 }
 			log.Println("error in readPump",err)
-			// panic(err)
-		
 			break
 		}
 

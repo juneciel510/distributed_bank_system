@@ -46,7 +46,7 @@ func (h *Hub) Run() {
 				h.log("Run", nil, "connection closed")
 			}
 		case msg:=<-h.broadcast:
-			fmt.Println("**************Run()*********in case <-h.broadcast: ",msg)
+			// fmt.Println("**************Run()*********in case <-h.broadcast: ",msg)
 			msgbytes, err := json.Marshal(msg)
 	
 	if err != nil {

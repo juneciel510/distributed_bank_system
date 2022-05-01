@@ -106,7 +106,6 @@ func NewDistNetwork(sID int, currentSerList []int, allNodeInfo NodesInfo, aInfo 
 		ActIn: make(chan Activiate, 8),
 	
 		CheckPoint: make(map[int]multipaxos.DecidedValue),
-		// ClientWSMap: make(map[int]*client.WebSocketClient),
 		SyncCWSM:syncCWSM,
 		Broadcast: broadcast,
 		MsgIn:msgIn,
@@ -120,14 +119,13 @@ func (d *DistNetworks) start() {
 	d.Proposer.Start()
 	d.Acceptor.Start()
 	d.Learner.Start()
-	log.Println("***start()*********the Fd&paxos have been started")
+	log.Println("************the Fd&paxos have been started")
 }
 
 func  (d *DistNetworks)StartServerWS(){
 	log.Println("***d.CurrentServ",d.CurrentServ)
 	for _, v := range d.CurrentServ {
 		if d.SID == v {
-			log.Println("************the Fd&paxos have been started")
 			d.start()
 		}
 	}
@@ -156,24 +154,22 @@ func (d *DistNetworks) startClientWS(){
 
 	for _,v := range d.CurrentServ{	
 		if v!=d.SID{
-			log.Println("****startClientWS()",v,d.SID)
 			addr := d.AllNodeInfo.ServerAddrmap[v]
 			clientws, err := client.NewWebSocketClient(addr, "ws")
 			if err != nil {
 				panic(err)
 			}
-			// d.ClientWSMap[v]=clientws
 			d.writeSyncClientWSMap(v,clientws)
+			fmt.Printf("The local server ID is %d, dialed server %d successfully\n", d.SID,v)
 		}
 
 	}	
-	log.Println("Connected to current servers:",d.SyncCWSM.ClientWSMap)
+	log.Println("The websocket of current servers has been stored:",d.SyncCWSM.ClientWSMap)
 }
 
 //send messages to a single serverWS specified
 func (d *DistNetworks) sendMsgToServerWS(msg server.Message, sID int ){
 	
-	log.Println("-------------sendMsgToServerWS---sID,d.SyncCWSM.ClientWSMap-----",sID,d.SyncCWSM.ClientWSMap,msg)
 	//if no connection with the specified server, dial the server
 	clientws:=d.readSyncClientWSMap(sID)
 	if  clientws==nil {
@@ -187,11 +183,9 @@ func (d *DistNetworks) sendMsgToServerWS(msg server.Message, sID int ){
 		d.writeSyncClientWSMap(sID,clientws)
 	}
 
-	log.Println("sID,d.SyncCWSM.ClientWSMap----",sID,d.SyncCWSM.ClientWSMap)
 	clientws=d.readSyncClientWSMap(sID)
-	log.Println("-------clientws--",clientws)
 	if clientws==nil {
-		panic("----clientws is nil")
+		panic(fmt.Sprintf("the websocket address of sever%d is nil", sID))
 	}
 	err:=clientws.Write(msg)
 	if err != nil {
@@ -228,7 +222,6 @@ func (d *DistNetworks) broadcastToReactClient(msg server.Message){
 
 //deplexing the incoming data from the network
 func (d *DistNetworks) handleMessage(msg server.Message) *server.Message {
-	log.Println("----------handleMessage------msg received",msg)
 	switch msg.Command {
 
 	case "CLIENT":
@@ -244,7 +237,6 @@ func (d *DistNetworks) handleMessage(msg server.Message) *server.Message {
 		break
 
 	case "HEARTBEAT":
-		// log.Println("heartbeat received:",msg)
 		params := msg.Parameter.(map[string]interface{})
 		from := int(params["From"].(float64))
 		to := int(params["To"].(float64))
@@ -262,20 +254,15 @@ func (d *DistNetworks) handleMessage(msg server.Message) *server.Message {
 		cID := params["ClientID"].(string)
 
 		cSq := int(params["ClientSeq"].(float64))
-		log.Println("cSq",cSq)
 		noop := params["Noop"].(bool)
 
 		accNo := int(params["AccountNum"].(float64))
-		log.Println("accNo ",accNo )
 
 		paramsTxn := params["Txn"].(map[string]interface{})
 		op := bank.Operation(paramsTxn["Op"].(float64))
-		log.Println("op",op)
 		amount := int(paramsTxn["Amount"].(float64))
-		log.Println("Amount",amount)
 		txn := bank.Transaction{Op: op, Amount: amount}
 		val := multipaxos.Value{ClientID: cID, ClientSeq: cSq, Noop: noop, AccountNum: accNo, Txn: txn}
-		log.Println(" VALUE translated ", val)
 		//receive the value from the client, if not leader,
 		if d.SID != d.Ld.Leader() {
 			//forwards the value request to the leader
@@ -322,7 +309,6 @@ func (d *DistNetworks) handleMessage(msg server.Message) *server.Message {
 		d.Acceptor.DeliverPrepare(prep)
 		break
 	case "ACCEPT":
-		log.Println(" ACCEPT  ", msg)
 		params := msg.Parameter.(map[string]interface{})
 		from := int(params["From"].(float64))
 		slot := multipaxos.SlotID(params["Slot"].(float64))
@@ -341,10 +327,10 @@ func (d *DistNetworks) handleMessage(msg server.Message) *server.Message {
 		val:=TransValue(paramsVal)
 		
 		ln := multipaxos.Learn{From: from, Slot: slot, Rnd: rnd, Val: val}
-		//log.Println(" LEARN translated ", ln)
 		d.Learner.DeliverLearn(ln)
 		break
 
+		//receive message from client for reconfiguration
 	case "RECONFIG":
 		params := msg.Parameter.(map[string]interface{})
 		newerServStr := params["NewerServStr"].(string)
@@ -354,11 +340,11 @@ func (d *DistNetworks) handleMessage(msg server.Message) *server.Message {
 			Timestamp:    ts,
 			NewerServStr: newerServStr,
 		}
-		log.Println("***-------------handle message()")
-		log.Println("receive reconf msg", reconf)
+		log.Println("receive reconfig msg", reconf)
 		d.ReconfIn <- reconf
 		break
 
+		//receive message from leader asking for states
 	case "NEWCONFIG":
 		params := msg.Parameter.(map[string]interface{})
 		from := int(params["From"].(float64))
@@ -385,6 +371,7 @@ func (d *DistNetworks) handleMessage(msg server.Message) *server.Message {
 		d.NewconfIn <- newconf
 		break
 
+		//message submitted by servers for voting the newsest state
 	case "CPROMISE":
 		params := msg.Parameter.(map[string]interface{})
 		to := int(params["To"].(float64))
@@ -444,6 +431,8 @@ func (d *DistNetworks) handleMessage(msg server.Message) *server.Message {
 		d.CPromiseIn <- cPrm
 		break
 
+		//all newer servers receive message from leader 
+		//to update the states and start services
 	case "ACTIVIATE":
 		params := msg.Parameter.(map[string]interface{})
 		from := int(params["From"].(float64))
@@ -561,7 +550,7 @@ func (d *DistNetworks) handleChan(){
 		//then send newconfig msg to olderserver
 		//if it is not leader, forwards to leader
 		case reconf := <-d.ReconfIn:
-			log.Println("*******---------case reconf := <-d.ReconfIn")
+			log.Println("*****Reconfugration message received")
 			if d.SID == d.Ld.Leader() {
 				if reconf.Timestamp > d.TimeReconf {
 					d.Quorum = len(d.CurrentServ)/2 + 1
@@ -590,7 +579,6 @@ func (d *DistNetworks) handleChan(){
 			} else {
 				//forwards reconfig msg to leader
 				msg := server.Message{Command: "RECONFIG", Parameter: reconf}
-				log.Println("msg", msg)
 				sID :=d.Ld.Leader()
 				go d.sendMsgToServerWS(msg , sID  )
 
@@ -727,7 +715,7 @@ func (d *DistNetworks) handleCPrmIn(cPrm CPromise) {
 					}
 					msg := server.Message{Command: "ACTIVIATE", Parameter: actv}
 					newerSer := actv.Stat.NewerServer
-					log.Println("-------going to send msg ACTIVIATE", actv.Stat.Timestamp)
+					log.Println("-------send msg ACTIVIATE", actv.Stat.Timestamp)
 					for _, v := range newerSer {
 						if v==d.SID {
 							d.ActIn<-actv
