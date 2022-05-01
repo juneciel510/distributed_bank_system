@@ -1,12 +1,16 @@
 import React from "react";
-import styled from "styled-components";
 
 class Reconfiguration extends React.Component {
   render() {
     return (
       <div className="Reconfig">
         <form name="reconfig" onSubmit={this.props.handleSubmit_CB}>
-          Choose the servers you want to reconfig:
+          <p>
+            {" "}
+            Choose the servers you want to reconfig:
+            <br />
+            (start the new severs first if you want to scale up)
+          </p>
           <ul className="server-list">
             {this.props.serverIDs.map((server, index) => {
               return (

@@ -102,7 +102,7 @@ h4 {
   margin-bottom: 0.3rem;
 }
 p {
-  color: var(--clr-grey-5);
+  color: var(--clr-grey-1);
 }
 @media screen and (min-width: 800px) {
   h1 {
@@ -235,17 +235,6 @@ nav {
     padding: 0;
     background: transparent;
   }
-  .social-icons {
-    display: flex;
-  }
-  .social-icons a {
-    margin: 0 0.5rem;
-    color: var(--clr-primary-5);
-    transition: var(--transition);
-  }
-  .social-icons a:hover {
-    color: var(--clr-primary-7);
-  }
 }
 /*
 =============== 
@@ -285,17 +274,20 @@ Reconfiguration Styles
   margin: 0.8rem 0;
 }
 
-ul {
+.Reconfig ul {
   display: table;
   width: 100%;
   text-align: center;
 }
 
-li {
+.Reconfig li {
   display: table-cell;
   padding: 0 2rem 0 0;
 }
 
+.Reconfig p {
+  margin-bottom: 0.35rem;
+}
 .checkbox {
   margin-right: 0.2rem;
 }

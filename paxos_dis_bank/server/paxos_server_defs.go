@@ -110,7 +110,7 @@ type DistNetworks struct {
 	ActIn chan Activiate
 	CheckPoint map[int]multipaxos.DecidedValue //key is adu
 
-	// ClientWSMap map[int]*client.WebSocketClient//store the websocket of all other servers
+	//syncmap for cocurrently writing and reading
 	SyncCWSM SyncClientWSMap
 	Hub *server.Hub
 	Broadcast chan server.Message
